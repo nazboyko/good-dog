@@ -20,6 +20,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /events", httpapi.Events())
+	mux.HandleFunc("GET /api/audio/{file}", httpapi.Audio("assets/audio"))
 
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

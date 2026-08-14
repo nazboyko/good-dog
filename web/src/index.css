@@ -32,3 +32,22 @@ h1 {
 .check .status.ok {
   color: #8fc97e;
 }
+
+.check .status.fail {
+  color: #d98a7a;
+}
+
+button {
+  font: inherit;
+  background: #2c2820;
+  color: inherit;
+  border: 1px solid #4a4436;
+  border-radius: 4px;
+  padding: 4px 12px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #3a3428;
+}
