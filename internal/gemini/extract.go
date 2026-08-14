@@ -51,7 +51,10 @@ func (e *Extraction) Validate() error {
 	return nil
 }
 
-// ExtractNote validates the model output and retries once, per docs/tech-stack.md.
+// ExtractNote retries invalid output once, per docs/tech-stack.md.
+// Transport failures are not retried here, the client already did.
+// A 200 with no candidate text also fails fast, deterministic
+// truncation would not get better on a second try.
 func (c *Client) ExtractNote(ctx context.Context, note string) (*Extraction, error) {
 	// a note containing the sentinel could break out of the data block
 	note = strings.ReplaceAll(note, "NOTE_END", "NOTE END")
@@ -61,8 +64,7 @@ func (c *Client) ExtractNote(ctx context.Context, note string) (*Extraction, err
 	for attempt := 0; attempt < 2; attempt++ {
 		raw, err := c.GenerateJSON(ctx, prompt, opts)
 		if err != nil {
-			lastErr = err
-			continue
+			return nil, err
 		}
 		var out Extraction
 		if err := json.Unmarshal(raw, &out); err != nil {

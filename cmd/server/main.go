@@ -23,7 +23,7 @@ func main() {
 
 	var geminiClient *gemini.Client
 	if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-		geminiClient = gemini.New(key, os.Getenv("GEMINI_MODEL"))
+		geminiClient = gemini.New(key)
 	} else {
 		log.Print("GEMINI_API_KEY not set, gemini endpoints disabled")
 	}

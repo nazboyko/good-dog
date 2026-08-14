@@ -6,28 +6,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
-const DefaultModel = "gemini-2.5-flash"
+// pinned on purpose: flash quota and latency, never a pro model
+const model = "gemini-2.5-flash"
 
+const requestsPerMinute = 8
+
+// Client is safe for concurrent use, construct one per process so the
+// rate limit covers every call in the app.
 type Client struct {
 	apiKey  string
-	model   string
 	baseURL string
 	http    *http.Client
+	limiter *rateLimiter
+	backoff []time.Duration
 }
 
-func New(apiKey, model string) *Client {
-	if model == "" {
-		model = DefaultModel
-	}
+func New(apiKey string) *Client {
 	return &Client{
 		apiKey:  apiKey,
-		model:   model,
 		baseURL: "https://generativelanguage.googleapis.com",
 		http:    &http.Client{Timeout: 30 * time.Second},
+		limiter: newRateLimiter(requestsPerMinute, time.Minute),
+		backoff: []time.Duration{20 * time.Second, 40 * time.Second, 80 * time.Second},
 	}
 }
 
@@ -40,8 +46,9 @@ type Options struct {
 	DisableThinking bool
 }
 
-// GenerateJSON runs one structured output call and returns the raw JSON text.
-// Callers validate against their own type and decide about retries.
+// GenerateJSON runs one structured output call and returns the raw JSON
+// text. It queues behind the rate limit and retries 429 and 5xx with
+// backoff, so callers only retry semantic failures.
 func (c *Client) GenerateJSON(ctx context.Context, prompt string, opts Options) ([]byte, error) {
 	generationConfig := map[string]any{
 		"temperature":      opts.Temperature,
@@ -52,20 +59,60 @@ func (c *Client) GenerateJSON(ctx context.Context, prompt string, opts Options) 
 	if opts.DisableThinking {
 		generationConfig["thinkingConfig"] = map[string]any{"thinkingBudget": 0}
 	}
-	body := map[string]any{
+	payload, err := json.Marshal(map[string]any{
 		"contents": []map[string]any{
 			{"parts": []map[string]string{{"text": prompt}}},
 		},
 		"generationConfig": generationConfig,
-	}
-	payload, err := json.Marshal(body)
+	})
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent", c.baseURL, c.model)
+
+	for attempt := 0; ; attempt++ {
+		if err := c.limiter.wait(ctx); err != nil {
+			return nil, err
+		}
+		raw, status, err := c.post(ctx, payload)
+		if err == nil && status == http.StatusOK {
+			return candidateText(raw)
+		}
+		if err == nil && !retryable(status) {
+			return nil, fmt.Errorf("gemini status %d: %.200s", status, raw)
+		}
+		if attempt >= len(c.backoff) {
+			if err != nil {
+				return nil, fmt.Errorf("gemini gave up after %d attempts: %w", attempt+1, err)
+			}
+			return nil, fmt.Errorf("gemini gave up after %d attempts, status %d: %.200s", attempt+1, status, raw)
+		}
+		delay := c.backoff[attempt]
+		if err == nil {
+			if hinted, ok := parseRetryDelay(raw); ok {
+				// honor the server hint, capped so a stuck caller frees up
+				delay = min(hinted, 2*time.Minute)
+			}
+		}
+		reason := fmt.Sprintf("status %d", status)
+		if err != nil {
+			reason = err.Error()
+		}
+		log.Printf("gemini attempt %d failed (%s), retrying in %s", attempt+1, reason, delay)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (c *Client) post(ctx context.Context, payload []byte) (body []byte, status int, err error) {
+	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent", c.baseURL, model)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payload))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// key travels in a header, never in the url
@@ -73,17 +120,42 @@ func (c *Client) GenerateJSON(ctx context.Context, prompt string, opts Options) 
 
 	res, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return nil, err
+		return nil, res.StatusCode, err
 	}
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("gemini status %d: %.200s", res.StatusCode, raw)
+	return raw, res.StatusCode, nil
+}
+
+// transport errors arrive as err and are retried like a 5xx
+func retryable(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
+}
+
+// parseRetryDelay pulls RetryInfo.retryDelay like "27s" out of a google error body.
+func parseRetryDelay(raw []byte) (time.Duration, bool) {
+	var body struct {
+		Error struct {
+			Details []struct {
+				Type       string `json:"@type"`
+				RetryDelay string `json:"retryDelay"`
+			} `json:"details"`
+		} `json:"error"`
 	}
-	return candidateText(raw)
+	if json.Unmarshal(raw, &body) != nil {
+		return 0, false
+	}
+	for _, d := range body.Error.Details {
+		if strings.HasSuffix(d.Type, "RetryInfo") && d.RetryDelay != "" {
+			if dur, err := time.ParseDuration(d.RetryDelay); err == nil && dur > 0 {
+				return dur, true
+			}
+		}
+	}
+	return 0, false
 }
 
 // candidateText pulls the first candidate text out of a generateContent response.
