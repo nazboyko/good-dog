@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+# secret scan on staged changes
+if git diff --cached | grep -nEi '(sk-[a-z0-9]{16,}|api[_-]?key\s*[:=]\s*["'"'"'][a-z0-9]|xi-api-key\s*[:=])' > /dev/null; then
+  echo "possible secret in staged changes, remove it and use .env" >&2
+  exit 1
+fi
+# go checks if a go module exists
+if [ -f go.mod ]; then
+  gofmt -l . | grep -v vendor && { echo "gofmt needed" >&2; exit 1; } || true
+  go vet ./... || exit 1
+  go test ./... || exit 1
+fi
+# frontend checks if the web package exists
+if [ -f web/package.json ]; then
+  (cd web && npm run -s typecheck && npm test -s -- --run) || exit 1
+fi
+exit 0

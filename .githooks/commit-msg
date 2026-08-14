@@ -1,0 +1,15 @@
+#!/bin/bash
+msg=$(head -1 "$1")
+if ! echo "$msg" | grep -qE '^(added|updated|fixed|removed|refactored|tested|deployed|docs) '; then
+  echo "commit message must start with: added, updated, fixed, removed, refactored, tested, deployed, docs" >&2
+  exit 1
+fi
+if [ ${#msg} -gt 72 ]; then
+  echo "commit message too long, keep it under 72 chars" >&2
+  exit 1
+fi
+if echo "$msg" | grep -qiE 'co-authored|generated with'; then
+  echo "no tool attribution in commits" >&2
+  exit 1
+fi
+exit 0
