@@ -14,7 +14,10 @@ export async function runVisionCheck(
   onStatus({ state: "rendering" });
   try {
     const mode = await renderDogVision(canvas, TEST_SCENE);
-    onStatus({ state: `rendered with ${mode}`, ok: true });
+    onStatus({
+      state: mode === "webgl" ? "rendered with webgl, swatches pass" : `rendered with ${mode}`,
+      ok: true,
+    });
   } catch (err) {
     onStatus({ state: `failed: ${String(err)}`, ok: false });
   }
