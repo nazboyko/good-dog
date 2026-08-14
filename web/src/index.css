@@ -1,0 +1,34 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  margin: 0;
+  background: #14120f;
+  color: #e8e2d5;
+}
+
+main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+h1 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.check {
+  padding: 10px 0;
+  border-bottom: 1px solid #2c2820;
+}
+
+.check .status {
+  color: #9a917d;
+}
+
+.check .status.ok {
+  color: #8fc97e;
+}
