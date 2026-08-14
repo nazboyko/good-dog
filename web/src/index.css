@@ -51,3 +51,26 @@ button {
 button:hover {
   background: #3a3428;
 }
+
+.vision {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vision figure {
+  flex: 1;
+  margin: 0;
+}
+
+.vision img,
+.vision canvas {
+  width: 100%;
+  display: block;
+}
+
+.vision figcaption {
+  color: #9a917d;
+  font-size: 12px;
+  padding-top: 4px;
+}

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { playAudio } from "./spike/audio";
 import { runGeminiExtraction } from "./spike/gemini";
 import { connectEvents, onEvent, type SpikeEvent } from "./spike/sse";
 import type { SpikeStatus } from "./spike/status";
+import { runVisionCheck, TEST_SCENE } from "./spike/vision";
 
 function Check(props: {
   name: string;
@@ -24,6 +25,8 @@ export default function App() {
   const [lastEvent, setLastEvent] = useState<SpikeEvent | null>(null);
   const [audio, setAudio] = useState<SpikeStatus>({ state: "waiting for a click" });
   const [gemini, setGemini] = useState<SpikeStatus>({ state: "waiting for a click" });
+  const [vision, setVision] = useState<SpikeStatus>({ state: "waiting for a click" });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     connectEvents();
@@ -51,7 +54,21 @@ export default function App() {
         <button onClick={() => runGeminiExtraction(setGemini)}>run extraction</button>
       </Check>
       <Check name="4 elevenlabs" status="not wired yet" />
-      <Check name="5 shader" status="not wired yet" />
+      <Check name="5 shader" status={vision.state} ok={vision.ok}>
+        <button onClick={() => runVisionCheck(canvasRef.current, setVision)}>
+          render dog vision
+        </button>
+        <div className="vision">
+          <figure>
+            <img src={TEST_SCENE} alt="scene as humans see it" />
+            <figcaption>human eyes</figcaption>
+          </figure>
+          <figure>
+            <canvas ref={canvasRef} />
+            <figcaption>dog eyes</figcaption>
+          </figure>
+        </div>
+      </Check>
     </main>
   );
 }
