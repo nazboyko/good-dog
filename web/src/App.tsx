@@ -3,6 +3,7 @@ import { playAudio } from "./spike/audio";
 import { runGeminiExtraction } from "./spike/gemini";
 import { connectEvents, onEvent, type SpikeEvent } from "./spike/sse";
 import type { SpikeStatus } from "./spike/status";
+import { runTtsCheck } from "./spike/tts";
 import { runVisionCheck, TEST_SCENE } from "./spike/vision";
 
 function Check(props: {
@@ -26,6 +27,7 @@ export default function App() {
   const [audio, setAudio] = useState<SpikeStatus>({ state: "waiting for a click" });
   const [gemini, setGemini] = useState<SpikeStatus>({ state: "waiting for a click" });
   const [vision, setVision] = useState<SpikeStatus>({ state: "waiting for a click" });
+  const [tts, setTts] = useState<SpikeStatus>({ state: "waiting for a click" });
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -53,7 +55,9 @@ export default function App() {
       <Check name="3 gemini" status={gemini.state} ok={gemini.ok}>
         <button onClick={() => runGeminiExtraction(setGemini)}>run extraction</button>
       </Check>
-      <Check name="4 elevenlabs" status="not wired yet" />
+      <Check name="4 elevenlabs" status={tts.state} ok={tts.ok}>
+        <button onClick={() => runTtsCheck(setTts)}>speak test line</button>
+      </Check>
       <Check name="5 shader" status={vision.state} ok={vision.ok}>
         <button onClick={() => runVisionCheck(canvasRef.current, setVision)}>
           render dog vision

@@ -7,16 +7,23 @@ import (
 	"strings"
 )
 
-// Audio serves mp3 files from root by name. http.ServeContent gives the
-// range support browsers need to seek and to start playback fast.
-func Audio(root string) http.HandlerFunc {
+// Audio serves mp3 files by name from the first root that has them.
+// http.ServeContent gives the range support browsers need to seek and
+// to start playback fast.
+func Audio(roots ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("file")
 		if !safeAudioName(name) {
 			http.Error(w, "bad audio name", http.StatusBadRequest)
 			return
 		}
-		f, err := os.Open(filepath.Join(root, name))
+		var f *os.File
+		var err error
+		for _, root := range roots {
+			if f, err = os.Open(filepath.Join(root, name)); err == nil {
+				break
+			}
+		}
 		if err != nil {
 			http.Error(w, "audio not found", http.StatusNotFound)
 			return
