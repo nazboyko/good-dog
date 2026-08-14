@@ -1,14 +1,14 @@
 // Singleton audio graph. Sound may only start from a user gesture, and
 // createMediaElementSource works once per element, see docs/tech-stack.md.
 
-export type AudioStatus = { state: string; ok?: boolean };
+import type { SpikeStatus } from "./status";
 
 let context: AudioContext | null = null;
 let element: HTMLAudioElement | null = null;
 
 export async function playAudio(
   url: string,
-  onStatus: (s: AudioStatus) => void,
+  onStatus: (s: SpikeStatus) => void,
 ): Promise<void> {
   try {
     if (!context) {

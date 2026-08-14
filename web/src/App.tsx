@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { playAudio, type AudioStatus } from "./spike/audio";
+import { playAudio } from "./spike/audio";
+import { runGeminiExtraction } from "./spike/gemini";
 import { connectEvents, onEvent, type SpikeEvent } from "./spike/sse";
+import type { SpikeStatus } from "./spike/status";
 
 function Check(props: {
   name: string;
@@ -20,7 +22,8 @@ function Check(props: {
 export default function App() {
   const [sseStatus, setSseStatus] = useState("connecting");
   const [lastEvent, setLastEvent] = useState<SpikeEvent | null>(null);
-  const [audio, setAudio] = useState<AudioStatus>({ state: "waiting for a click" });
+  const [audio, setAudio] = useState<SpikeStatus>({ state: "waiting for a click" });
+  const [gemini, setGemini] = useState<SpikeStatus>({ state: "waiting for a click" });
 
   useEffect(() => {
     connectEvents();
@@ -44,7 +47,9 @@ export default function App() {
           play test sound
         </button>
       </Check>
-      <Check name="3 gemini" status="not wired yet" />
+      <Check name="3 gemini" status={gemini.state} ok={gemini.ok}>
+        <button onClick={() => runGeminiExtraction(setGemini)}>run extraction</button>
+      </Check>
       <Check name="4 elevenlabs" status="not wired yet" />
       <Check name="5 shader" status="not wired yet" />
     </main>
