@@ -41,27 +41,36 @@ export function Visitor({
   const visitor = view.visitor;
   if (!visitor) return null;
   const answered = Boolean(visitor.signal);
+  // the panel and the narrator share one reserved slot: the panel fades
+  // out and the narrator fades in over it, nothing above them moves
   return (
     <section className="beat">
       <p className="beat-line">A pair of shoes stops in front of your kennel.</p>
       <p className="beat-line">A hand rests on the gate. She is looking at you.</p>
-      {!answered && (
-        <div className="panel" role="group" aria-label="how do you answer">
+      <div className="visitor-slot">
+        <div
+          className={`panel fade-quick ${answered ? "" : "is-shown"}`}
+          role="group"
+          aria-label="how do you answer"
+          aria-hidden={answered}
+        >
           {visitor.options.map((v) => (
-            <button key={v} onClick={() => onSignal(v)}>
+            <button key={v} onClick={() => onSignal(v)} tabIndex={answered ? -1 : 0}>
               {VOCALIZATION_LABELS[v]}
             </button>
           ))}
         </div>
-      )}
-      {answered && visitor.mismatch && (
-        <div className="narrator" aria-live="polite">
-          <p className="narrator-meant">you meant: {visitor.mismatch.meant}</p>
-          <p className="narrator-heard">she heard: {visitor.mismatch.heard}</p>
-          <p className="beat-line">She stays a moment longer. Then the shoes move on.</p>
-          <button onClick={onNext}>the day goes on</button>
+        <div className={`narrator fade ${answered ? "is-shown" : ""}`} aria-live="polite" aria-hidden={!answered}>
+          {visitor.mismatch && (
+            <>
+              <p className="narrator-meant">you meant: {visitor.mismatch.meant}</p>
+              <p className="narrator-heard">she heard: {visitor.mismatch.heard}</p>
+              <p className="beat-line">She stays a moment longer. Then the shoes move on.</p>
+              <button onClick={onNext}>the day goes on</button>
+            </>
+          )}
         </div>
-      )}
+      </div>
     </section>
   );
 }

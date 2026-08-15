@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -47,8 +50,14 @@ func (failingLLM) GenerateJSON(context.Context, string, gemini.Options) ([]byte,
 func newTestServer(t *testing.T) (*httptest.Server, string) {
 	t.Helper()
 	dir := t.TempDir()
-	photo := filepath.Join(dir, "venus.jpg")
-	if err := os.WriteFile(photo, []byte("not really a jpeg"), 0o644); err != nil {
+	photo := filepath.Join(dir, "venus.png")
+	// a real 3x2 png so the epilogue can read the size from the header
+	img := image.NewRGBA(image.Rect(0, 0, 3, 2))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(photo, buf.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	dog := animal.Animal{
@@ -126,6 +135,9 @@ func TestSessionRunOnRails(t *testing.T) {
 	e := v.Epilogue
 	if e.ListingURL != "https://example.org/venus" || e.OrgName != "Ruff Start Rescue" || !e.LongStay {
 		t.Errorf("epilogue facts: %+v", e)
+	}
+	if e.PhotoWidth != 3 || e.PhotoHeight != 2 {
+		t.Errorf("epilogue must carry the photo size for the reserved box, got %dx%d", e.PhotoWidth, e.PhotoHeight)
 	}
 	// and now the photo route opens
 	r, err := http.Get(srv.URL + e.PhotoURL)

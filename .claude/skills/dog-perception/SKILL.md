@@ -23,5 +23,11 @@ description: Sensory constants and rules for dog vision, scent, hearing, and the
 - Mismatch narrator after every signal, two short lines, you meant and they heard, in every mode
 - Vocabulary: repeated words unlock and play clean inside muffled speech, the dog's real name rings clear the first time it is spoken
 
+## Presentation
+- Reserved space plus fade, never insert and push. Every line, photo, and panel that will appear has its space from the start, and appears by opacity in place. Nothing above it moves by a pixel. The screen breathes, it does not jump
+- Nothing pops. All appearing and disappearing UI fades or eases: 400 to 600ms for quiet moments like the reveal, 150 to 250ms for interactive feedback like the vocalization panel. No instant show or hide
+- Photos reserve their box from the real dimensions before they load, so a load never reflows text
+- Reduced motion turns fades instant but keeps every reserved space, so it never reintroduces the jump
+
 ## Accessibility
 Subtitles for all audio always. Reduced motion disables particles and camera moves. Everything readable without color alone.

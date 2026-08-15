@@ -31,6 +31,8 @@ export interface ListingRecord {
 export interface EpilogueView {
   name: string;
   photo_url: string;
+  photo_width: number;
+  photo_height: number;
   listing_url: string;
   org_name: string;
   org_short: string;

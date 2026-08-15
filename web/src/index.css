@@ -106,6 +106,24 @@ button:hover {
   animation: settle 900ms ease-out both;
 }
 
+/* the one pattern for anything that appears or disappears: it is in the
+   dom with its space reserved, and only opacity changes. quiet moments
+   take a slow fade, interactive feedback a quick one. */
+.fade {
+  opacity: 0;
+  transition: opacity 520ms ease;
+}
+
+.fade-quick {
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.fade.is-shown,
+.fade-quick.is-shown {
+  opacity: 1;
+}
+
 .beat-self {
   color: #cdb97a;
   font-style: italic;
@@ -128,8 +146,23 @@ button:hover {
   width: 100%;
 }
 
+.visitor-slot {
+  position: relative;
+  margin-top: 8px;
+  /* tall enough for the narrator, the taller of the two, so the swap
+     never moves the lines above */
+  min-height: 190px;
+}
+
+.visitor-slot .panel {
+  position: absolute;
+  inset: 0 0 auto 0;
+  margin: 0;
+}
+
 .narrator {
-  margin-top: 18px;
+  position: absolute;
+  inset: 0 0 auto 0;
   padding-left: 14px;
   border-left: 2px solid #4a4436;
 }
@@ -166,24 +199,31 @@ button:hover {
 
 .reveal-line {
   margin: 0 0 22px;
-  animation: settle 1400ms ease-out both;
+  /* reserved even when the line is invisible, so nothing below moves */
+  min-height: 1.55em;
 }
 
 .reveal-photo {
   margin: 8px 0 22px;
-  animation: photo-in 2200ms ease-out both;
+  /* the box is sized from the real photo ratio before the load, capped
+     by height, so its arrival never reflows the text */
+  width: 100%;
+  max-height: 60vh;
+  border-radius: 3px;
+  overflow: hidden;
+  transition: opacity 1400ms ease, filter 1400ms ease;
+  filter: saturate(0.4) blur(6px);
+}
+
+.reveal-photo.is-shown {
+  filter: none;
 }
 
 .reveal-photo img {
   display: block;
-  max-width: 100%;
-  max-height: 60vh;
-  border-radius: 3px;
-}
-
-@keyframes photo-in {
-  from { opacity: 0; filter: saturate(0.4) blur(6px); }
-  to { opacity: 1; filter: none; }
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 
@@ -210,9 +250,14 @@ button:hover {
   color: #d98a7a;
 }
 
+/* reduced motion: appearing is instant, but every reserved space stays
+   exactly where it is, so reduced motion never reintroduces the jump */
 @media (prefers-reduced-motion: reduce) {
-  .beat-line, .reveal-line, .reveal-photo, .reveal-end, .reveal-meet, .radio p {
+  .beat-line, .radio p {
     animation-duration: 1ms;
+  }
+  .fade, .fade-quick, .reveal-photo {
+    transition: none;
   }
 }
 
@@ -224,7 +269,11 @@ button:hover {
   align-items: flex-start;
   gap: 18px;
   margin-top: 8px;
-  animation: settle 1400ms ease-out both;
+}
+
+/* the reveal and the about panel share the page, only one is visible */
+.about-wrap {
+  min-height: 1px;
 }
 
 .reveal-about {

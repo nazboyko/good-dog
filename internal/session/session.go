@@ -4,9 +4,15 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"image"
+	"os"
 	"strings"
 	"sync"
 	"time"
+
+	// header decoders for the two photo formats in the cache
+	_ "image/jpeg"
+	_ "image/png"
 
 	"github.com/nazboyko/good-dog/internal/animal"
 	"github.com/nazboyko/good-dog/internal/dogsheet"
@@ -66,10 +72,14 @@ type NightView struct {
 // moment itself gets plain words. The verbatim record sits in Listing
 // and is shown only behind the quiet link, the transparency panel.
 type EpilogueView struct {
-	Name       string `json:"name"`
-	PhotoURL   string `json:"photo_url"`
-	ListingURL string `json:"listing_url"`
-	OrgName    string `json:"org_name"`
+	Name     string `json:"name"`
+	PhotoURL string `json:"photo_url"`
+	// real pixel size so the client reserves the box before the load,
+	// zero when the file cannot be read and the client uses a default
+	PhotoWidth  int    `json:"photo_width"`
+	PhotoHeight int    `json:"photo_height"`
+	ListingURL  string `json:"listing_url"`
+	OrgName     string `json:"org_name"`
 	// the org's name up to its first comma, for lines mid sentence:
 	// "Animal Humane Society" not the full adoption center title
 	OrgShort      string `json:"org_short"`
@@ -211,10 +221,13 @@ func (s *Session) epilogue(now time.Time) *EpilogueView {
 			quotes = append(quotes, f.Value)
 		}
 	}
+	w, h := photoSize(s.dog.PhotoLocal)
 	return &EpilogueView{
 		Name: s.dog.Name,
 		// session scoped so the route can refuse before the epilogue
 		PhotoURL:      "/api/session/" + s.ID + "/photo",
+		PhotoWidth:    w,
+		PhotoHeight:   h,
 		ListingURL:    s.dog.ListingURL,
 		OrgName:       s.org.Name,
 		OrgShort:      strings.TrimSpace(strings.SplitN(s.org.Name, ",", 2)[0]),
@@ -234,6 +247,21 @@ func (s *Session) epilogue(now time.Time) *EpilogueView {
 			Default:          s.sheet.Default,
 		},
 	}
+}
+
+// photoSize reads only the image header, no decode, so the reveal can
+// reserve the photo's box before a single byte of it is shown.
+func photoSize(path string) (width, height int) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, 0
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return 0, 0
+	}
+	return cfg.Width, cfg.Height
 }
 
 // StateName spells out a US postal code for the reveal, and passes
