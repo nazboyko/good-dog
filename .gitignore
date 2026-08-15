@@ -8,3 +8,4 @@ dist/
 web/dist/
 .DS_Store
 .idea/
+.vscode/
