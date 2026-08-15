@@ -1,5 +1,12 @@
 import { expect, test } from "vitest";
-import { REVEAL_STEPS, revealSchedule, revealedCount, skipAhead, VOCALIZATION_LABELS } from "./run";
+import {
+  REVEAL_STEPS,
+  revealSchedule,
+  revealSteps,
+  revealedCount,
+  skipAhead,
+  VOCALIZATION_LABELS,
+} from "./run";
 
 test("the reveal shows the photo only after the player is told twice the dog is real", () => {
   const keys = REVEAL_STEPS.map((s) => s.key);
@@ -7,6 +14,22 @@ test("the reveal shows the photo only after the player is told twice the dog is 
   expect(keys.indexOf("you_were")).toBeLessThan(photoAt);
   expect(keys.indexOf("not_a_character")).toBeLessThan(photoAt);
   expect(keys[keys.length - 1]).toBe("meet");
+});
+
+test("after the photo the lines keep the opening rhythm, one at a time, the button last", () => {
+  const keys = REVEAL_STEPS.map((s) => s.key);
+  expect(keys.slice(keys.indexOf("photo") + 1)).toEqual([
+    "waiting_at",
+    "age",
+    "long_stay",
+    "you_spent",
+    "meet",
+  ]);
+  const opening = REVEAL_STEPS[1].delay;
+  for (const step of REVEAL_STEPS.slice(3)) {
+    // no line after the photo lands faster than the opening beat minus a breath
+    expect(step.delay).toBeGreaterThanOrEqual(opening - 700);
+  }
 });
 
 test("reveal schedule is cumulative and never rushes", () => {
@@ -36,8 +59,8 @@ test("a click at 900ms shows the second line now and the photo 2.4s later, never
   expect(revealedCount(now(900 + 2400))).toBe(3);
   // and meet lands at the sum of the remaining delays, not later
   const remaining = REVEAL_STEPS.slice(2).reduce((s, x) => s + x.delay, 0);
-  expect(revealedCount(now(900 + remaining - 1))).toBe(5);
-  expect(revealedCount(now(900 + remaining))).toBe(6);
+  expect(revealedCount(now(900 + remaining - 1))).toBe(REVEAL_STEPS.length - 1);
+  expect(revealedCount(now(900 + remaining))).toBe(REVEAL_STEPS.length);
 });
 
 test("skipping ahead brings one line forward and keeps every later pause", () => {
@@ -48,11 +71,28 @@ test("skipping ahead brings one line forward and keeps every later pause", () =>
   expect(revealedCount(afterClick)).toBe(2);
   // and the photo still arrives exactly its own delay after that, not later
   expect(sched[2].at - afterClick).toBe(REVEAL_STEPS[2].delay);
-  // clicking through everything shows all six, then stays put
+  // clicking through everything shows every step, then stays put
   let t = 0;
-  for (let i = 0; i < 10; i++) t = skipAhead(t);
+  for (let i = 0; i < 12; i++) t = skipAhead(t);
   expect(revealedCount(t)).toBe(sched.length);
   expect(skipAhead(t)).toBe(t);
+});
+
+test("a dog with no long stay fact and no age spends no pause on those lines", () => {
+  const steps = revealSteps({ age_words: "", long_stay: false });
+  const keys = steps.map((s) => s.key);
+  expect(keys).not.toContain("age");
+  expect(keys).not.toContain("long_stay");
+  expect(keys[keys.length - 1]).toBe("meet");
+  // the you_spent line follows the waiting line by exactly its own delay
+  const sched = revealSchedule(steps);
+  const waitingAt = sched.find((s) => s.key === "waiting_at")!.at;
+  const spentAt = sched.find((s) => s.key === "you_spent")!.at;
+  expect(spentAt - waitingAt).toBe(REVEAL_STEPS.find((s) => s.key === "you_spent")!.delay);
+  // and every step counts toward the click through, none is a phantom
+  let t = 0;
+  for (let i = 0; i < steps.length; i++) t = skipAhead(t, steps);
+  expect(revealedCount(t, steps)).toBe(steps.length);
 });
 
 test("every vocalization has a plain label and silence is a real choice", () => {

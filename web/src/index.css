@@ -186,20 +186,6 @@ button:hover {
   to { opacity: 1; filter: none; }
 }
 
-.reveal-facts {
-  animation: settle 1400ms ease-out both;
-  color: #cbc3b2;
-  font-size: 18px;
-}
-
-.reveal-facts p { margin: 0 0 8px; }
-
-.reveal-quotes {
-  margin: 10px 0 0;
-  padding-left: 18px;
-  font-style: italic;
-  color: #b8ae9a;
-}
 
 .reveal-meet {
   display: inline-block;
@@ -225,14 +211,97 @@ button:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .beat-line, .reveal-line, .reveal-photo, .reveal-facts, .reveal-meet, .radio p {
+  .beat-line, .reveal-line, .reveal-photo, .reveal-end, .reveal-meet, .radio p {
     animation-duration: 1ms;
   }
 }
 
-.reveal-quotes-lead {
-  margin: 12px 0 0;
+
+/* the end of the reveal: the button, then one quiet link under it */
+.reveal-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  margin-top: 8px;
+  animation: settle 1400ms ease-out both;
+}
+
+.reveal-about {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   color: #9a917d;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
+
+.reveal-about:hover { color: #cbc3b2; background: none; }
+
+/* the transparency panel: the listing as written, plainly laid out */
+.about h2 {
+  font-size: 20px;
+  font-weight: 400;
+  margin: 0 0 18px;
+}
+
+.about h3 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: #9a917d;
+  font-weight: 400;
+  margin: 26px 0 8px;
+}
+
+.about-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 18px;
+  margin: 0;
+  font-size: 17px;
+}
+
+.about-facts dt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: #9a917d;
+  padding-top: 3px;
+}
+
+.about-facts dd { margin: 0; }
+
+.about-note {
+  font-size: 16px;
+  color: #b8ae9a;
+  margin: 0 0 10px;
+}
+
+.about-quotes {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 17px;
+  font-style: italic;
+  color: #cbc3b2;
+}
+
+.about-quotes li { margin-bottom: 4px; }
+
+.about-description {
+  font-size: 16px;
+  color: #b8ae9a;
+  white-space: pre-line;
+}
+
+.about-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 26px;
+}
+
+.about-actions button { margin: 0; }

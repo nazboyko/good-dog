@@ -113,7 +113,7 @@ func TestPhotoAndListingNeverLeakBeforeEpilogue(t *testing.T) {
 			t.Fatal(err)
 		}
 		body := string(raw)
-		for _, secret := range []string{"photo", ".jpg", "shelterluv", "listing", "Ruff Start", "long_stay", "49 lbs"} {
+		for _, secret := range []string{"photo", ".jpg", "shelterluv", "listing", "Ruff Start", "long_stay", "49 lbs", "4Y/1M", "four years", "Minnesota"} {
 			if strings.Contains(body, secret) {
 				t.Fatalf("beat %s leaks %q: %s", s.Beat(), secret, body)
 			}
@@ -135,8 +135,21 @@ func TestPhotoAndListingNeverLeakBeforeEpilogue(t *testing.T) {
 	if !e.LongStay || e.MinutesPlayed != 38 {
 		t.Errorf("epilogue facts wrong: long_stay=%v minutes=%d", e.LongStay, e.MinutesPlayed)
 	}
-	if len(e.Quotes) != 2 {
-		t.Errorf("epilogue quotes = %d, want the two description facts", len(e.Quotes))
+	// the moment speaks plain words, the record keeps the listing's own
+	if e.AgeWords != "four years old" || e.OrgState != "Minnesota" {
+		t.Errorf("reveal must use plain words: age %q state %q", e.AgeWords, e.OrgState)
+	}
+	if e.Listing.AgeText != "4Y/1M/1W" || e.Listing.WeightText != "49 lbs" || len(e.Listing.Quotes) != 2 || e.Listing.Description == "" {
+		t.Errorf("listing record must keep the verbatim strings: %+v", e.Listing)
+	}
+}
+
+func TestStateName(t *testing.T) {
+	if StateName("MN") != "Minnesota" || StateName("mn") != "Minnesota" {
+		t.Error("postal codes spell out")
+	}
+	if StateName("Ontario") != "Ontario" || StateName("") != "" {
+		t.Error("unknown values pass through untouched")
 	}
 }
 

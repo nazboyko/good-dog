@@ -62,19 +62,39 @@ type NightView struct {
 }
 
 // EpilogueView is the reveal. It is the first and only place the photo
-// and the listing url appear, and it names only verified facts.
+// and the listing url appear, and it names only verified facts. The
+// moment itself gets plain words. The verbatim record sits in Listing
+// and is shown only behind the quiet link, the transparency panel.
 type EpilogueView struct {
-	Name          string   `json:"name"`
-	PhotoURL      string   `json:"photo_url"`
-	ListingURL    string   `json:"listing_url"`
-	OrgName       string   `json:"org_name"`
-	OrgCity       string   `json:"org_city"`
-	OrgState      string   `json:"org_state"`
-	AgeText       string   `json:"age_text,omitempty"`
-	WeightText    string   `json:"weight_text,omitempty"`
-	LongStay      bool     `json:"long_stay"`
-	MinutesPlayed int      `json:"minutes_played"`
-	Quotes        []string `json:"quotes"`
+	Name       string `json:"name"`
+	PhotoURL   string `json:"photo_url"`
+	ListingURL string `json:"listing_url"`
+	OrgName    string `json:"org_name"`
+	// the org's name up to its first comma, for lines mid sentence:
+	// "Animal Humane Society" not the full adoption center title
+	OrgShort      string `json:"org_short"`
+	OrgCity       string `json:"org_city"`
+	OrgState      string `json:"org_state"`
+	AgeWords      string `json:"age_words,omitempty"`
+	LongStay      bool   `json:"long_stay"`
+	MinutesPlayed int    `json:"minutes_played"`
+
+	Listing ListingRecord `json:"listing"`
+}
+
+// ListingRecord is the listing as written, for the transparency panel:
+// the real description next to what the game inferred from it, plus
+// every listing field the game used, so the panel's promise is whole.
+type ListingRecord struct {
+	AgeText          string   `json:"age_text,omitempty"`
+	WeightText       string   `json:"weight_text,omitempty"`
+	Breed            string   `json:"breed"`
+	Sex              string   `json:"sex,omitempty"`
+	LongStayEvidence string   `json:"long_stay_evidence,omitempty"`
+	Quotes           []string `json:"quotes"`
+	Description      string   `json:"description"`
+	// true when the sheet is the canned default and no quotes were read
+	Default bool `json:"default"`
 }
 
 func newID() string {
@@ -184,13 +204,11 @@ func (s *Session) beforeReveal(line, fallback string) string {
 }
 
 func (s *Session) epilogue(now time.Time) *EpilogueView {
-	var quotes []string
+	// never nil: a default sheet has no quotes and the panel must not break
+	quotes := []string{}
 	for _, f := range s.sheet.Facts {
 		if f.Source == "description" {
 			quotes = append(quotes, f.Value)
-		}
-		if len(quotes) == 3 {
-			break
 		}
 	}
 	return &EpilogueView{
@@ -199,14 +217,46 @@ func (s *Session) epilogue(now time.Time) *EpilogueView {
 		PhotoURL:      "/api/session/" + s.ID + "/photo",
 		ListingURL:    s.dog.ListingURL,
 		OrgName:       s.org.Name,
+		OrgShort:      strings.TrimSpace(strings.SplitN(s.org.Name, ",", 2)[0]),
 		OrgCity:       s.org.City,
-		OrgState:      s.org.State,
-		AgeText:       s.dog.AgeText,
-		WeightText:    s.dog.WeightText,
+		OrgState:      StateName(s.org.State),
+		AgeWords:      AgeInWords(s.dog.AgeText),
 		LongStay:      s.dog.LongStay,
 		MinutesPlayed: int(now.Sub(s.StartedAt).Minutes()),
-		Quotes:        quotes,
+		Listing: ListingRecord{
+			AgeText:          s.dog.AgeText,
+			WeightText:       s.dog.WeightText,
+			Breed:            s.dog.Breed,
+			Sex:              s.dog.Sex,
+			LongStayEvidence: s.dog.LongStayEvidence,
+			Quotes:           quotes,
+			Description:      s.dog.Description,
+			Default:          s.sheet.Default,
+		},
 	}
+}
+
+// StateName spells out a US postal code for the reveal, and passes
+// anything it does not know through untouched.
+func StateName(code string) string {
+	if name, ok := stateNames[strings.ToUpper(code)]; ok {
+		return name
+	}
+	return code
+}
+
+var stateNames = map[string]string{
+	"AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+	"CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia",
+	"HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa",
+	"KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+	"MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri",
+	"MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+	"NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio",
+	"OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+	"SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont",
+	"VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+	"DC": "Washington, DC",
 }
 
 // PhotoLocal is exposed only for the photo route, which itself refuses
