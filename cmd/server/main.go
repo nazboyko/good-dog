@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/nazboyko/good-dog/internal/audiocache"
 	"github.com/nazboyko/good-dog/internal/config"
@@ -24,6 +26,9 @@ func main() {
 	var geminiClient *gemini.Client
 	if key := os.Getenv("GEMINI_API_KEY"); key != "" {
 		geminiClient = gemini.New(key)
+		preflightCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		geminiClient.PreflightModel(preflightCtx)
+		cancel()
 	} else {
 		log.Print("GEMINI_API_KEY not set, gemini endpoints disabled")
 	}

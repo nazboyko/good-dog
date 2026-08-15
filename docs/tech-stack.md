@@ -32,6 +32,7 @@
 | ElevenLabs free tier plus radio pool | credits gone on Saturday | Creator for a month plus budget guard |
 | Hotlinked photos plus dead urls | empty images in the epilogue | cache photos at sync |
 | Gemini free tier plus a burst of calls | 429 quota per minute | one shared client, 8 rpm queue, backoff honoring retryDelay, flash pinned |
+| Model lines retire for new projects | pinned model 429s with quota limit 0 while the key is fine | startup preflight lists models and warns, repin by hand |
 
 ## Steel thread spike, Friday, about one hour, before real work
 1. Go serves SSE through the Vite proxy and an event shows in the browser

@@ -12,13 +12,14 @@ import (
 	"time"
 )
 
-// pinned on purpose: flash quota and latency, never a pro model
-const model = "gemini-2.5-flash"
+// pinned on purpose: flash quota and latency, never a pro model,
+// the 2.5 line is retired for new projects, see the trap table
+const model = "gemini-3.6-flash"
 
 const requestsPerMinute = 8
 
 // Client is safe for concurrent use, construct one per process so the
-// rate limit covers every call in the app.
+// rate limit covers every generate call in the app.
 type Client struct {
 	apiKey  string
 	baseURL string
@@ -41,7 +42,7 @@ type Options struct {
 	Temperature     float64
 	MaxOutputTokens int
 	ResponseSchema  map[string]any
-	// thinking tokens count against maxOutputTokens on 2.5 models,
+	// thinking tokens count against maxOutputTokens,
 	// extraction turns thinking off so the budget is all answer
 	DisableThinking bool
 }
@@ -57,7 +58,9 @@ func (c *Client) GenerateJSON(ctx context.Context, prompt string, opts Options) 
 		"responseSchema":   opts.ResponseSchema,
 	}
 	if opts.DisableThinking {
-		generationConfig["thinkingConfig"] = map[string]any{"thinkingBudget": 0}
+		// the 3.x line replaced thinkingBudget with thinkingLevel,
+		// minimal emits zero thought tokens on flash
+		generationConfig["thinkingConfig"] = map[string]any{"thinkingLevel": "minimal"}
 	}
 	payload, err := json.Marshal(map[string]any{
 		"contents": []map[string]any{

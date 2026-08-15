@@ -46,9 +46,12 @@ func TestCandidateText(t *testing.T) {
 }
 
 func TestGenerateJSONPinsFlashModel(t *testing.T) {
+	if !strings.Contains(model, "flash") {
+		t.Fatalf("pinned model %q must stay on the flash line", model)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.URL.Path, "gemini-2.5-flash") {
-			t.Errorf("model not pinned, path %s", r.URL.Path)
+		if !strings.Contains(r.URL.Path, model) {
+			t.Errorf("pinned model missing from path %s", r.URL.Path)
 		}
 		if r.Header.Get("x-goog-api-key") != "test-key" {
 			t.Error("api key header missing")
@@ -59,6 +62,26 @@ func TestGenerateJSONPinsFlashModel(t *testing.T) {
 
 	if _, err := newTestClient(srv.URL).GenerateJSON(context.Background(), "hi", Options{}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDisableThinkingSendsMinimalLevel(t *testing.T) {
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		fmt.Fprint(w, fakeResponse(`{}`))
+	}))
+	defer srv.Close()
+
+	if _, err := newTestClient(srv.URL).GenerateJSON(context.Background(), "hi", Options{DisableThinking: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `"thinkingLevel":"minimal"`) {
+		t.Errorf("thinkingLevel minimal missing from body %s", body)
+	}
+	if strings.Contains(body, "thinkingBudget") {
+		t.Errorf("retired thinkingBudget field must not be sent, body %s", body)
 	}
 }
 
