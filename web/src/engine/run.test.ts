@@ -133,3 +133,17 @@ test("the fold follow moves only as far as needed and rides an eased curve", asy
   expect(easeInOut(1.4)).toBe(1);
   expect(easeInOut(-0.2)).toBe(0);
 });
+
+test("screen transitions breathe: out, a beat of dark, in, and reduced motion swaps instantly", async () => {
+  const { TRANSITION, transitionTimes } = await import("./run");
+  // the ranges the design asks for
+  expect(TRANSITION.out).toBeGreaterThanOrEqual(300);
+  expect(TRANSITION.out).toBeLessThanOrEqual(400);
+  expect(TRANSITION.dark).toBeGreaterThanOrEqual(200);
+  expect(TRANSITION.dark).toBeLessThanOrEqual(300);
+  // leaving is quicker than arriving
+  expect(TRANSITION.out).toBeLessThan(TRANSITION.in);
+  // reduced motion: no waits at all, the swap is instant
+  expect(transitionTimes(true)).toEqual({ out: 0, dark: 0 });
+  expect(transitionTimes(false)).toEqual({ out: TRANSITION.out, dark: TRANSITION.dark });
+});

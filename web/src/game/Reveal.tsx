@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EpilogueView, RevealStep } from "../engine/run";
 import { easeInOut, followTarget, revealSteps, revealedCount, skipAhead } from "../engine/run";
 import { AboutListing } from "./AboutListing";
-import { useViewTop } from "./useViewTop";
 
 // the fold follow lasts as long as the quiet fade, so they land together
 const FOLLOW_MS = 520;
@@ -27,8 +26,8 @@ export function Reveal({ view }: { view: EpilogueView }) {
   const [shown, setShown] = useState(0);
   const [about, setAbout] = useState(false);
   const origin = useRef(performance.now());
-  useViewTop();
-  // back from the panel returns to the reveal at its top too
+  // back from the panel returns to the reveal at the top of the page,
+  // where its centered composition lives
   useEffect(() => {
     if (!about) window.scrollTo(0, 0);
   }, [about]);

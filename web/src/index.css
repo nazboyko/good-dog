@@ -115,13 +115,17 @@ button:hover {
 /* ---- the run shell ---- */
 
 .run {
+  /* border box, so the padding lives inside the viewport height and the
+     page never grows a phantom scroll that pushes the composition down */
+  box-sizing: border-box;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  /* every view opens at its top, no dead space above the content, and
-     the button lands where a thumb can reach it on a phone */
-  justify-content: flex-start;
+  /* run screens are a centered composition: the scene sits in the middle
+     of the viewport as designed. the listing panel is the exception, it
+     is a document and opens at its top, see the :has() rule below */
+  justify-content: center;
   font-family: var(--serif);
   font-size: var(--text);
   line-height: var(--leading);
@@ -129,8 +133,12 @@ button:hover {
   padding: 24px 20px;
   padding-left: max(20px, env(safe-area-inset-left));
   padding-right: max(20px, env(safe-area-inset-right));
-  overflow-x: hidden;
 }
+
+/* horizontal overflow is clipped at the document, never on the shell:
+   overflow-x on a block forces overflow-y to auto and turns the shell
+   into its own scroll box, which paints a scrollable view as black */
+html, body { overflow-x: hidden; }
 
 .run h1 {
   font-family: var(--mono);
@@ -213,6 +221,25 @@ button:hover {
   outline-offset: 3px;
 }
 
+/* ---- screen transitions: fade out, a beat of dark, fade in ---- */
+
+/* the whole current screen rides one opacity layer. out is quicker
+   than in, so leaving feels decisive and arriving feels gentle. these
+   two durations mirror TRANSITION in web/src/engine/run.ts, keep them
+   in step or the shell goes dark before the fade ends */
+.run-screen {
+  opacity: 0;
+  transition: opacity 520ms ease;
+}
+
+.run-screen.is-shown { opacity: 1; }
+
+.run-screen:not(.is-shown) { transition-duration: 360ms; }
+
+/* the listing panel is a document, not a scene: it opens at its top and
+   scrolls, so its shell is top aligned while every run screen stays centered */
+.run:has(> .run-screen > .about) { justify-content: flex-start; }
+
 /* ---- motion: reserved space plus fade, never insert and push ---- */
 
 .fade { opacity: 0; transition: opacity var(--fade-quiet) ease; }
@@ -292,10 +319,11 @@ button:hover {
    follows from the cap so a tall photo never overflows sideways. */
 .reveal-photo {
   margin: 4px 0 clamp(10px, 2vh, 22px);
-  /* 50vh leaves room for the lines and the button on a tablet, where a
-     square photo at 55vh pushed the button just under the fold */
-  max-height: 50vh;
-  max-height: 50dvh;
+  /* the photo takes what is left after the lines, the button and the
+     shell padding, measured at 488px, and never more than half the
+     screen. one formula for every height, no gaps between breakpoints */
+  max-height: min(50vh, calc(100vh - 500px));
+  max-height: min(50dvh, calc(100dvh - 500px));
   max-width: 100%;
   border-radius: 3px;
   overflow: hidden;
@@ -321,7 +349,6 @@ button:hover {
   margin-top: 4px;
 }
 
-.about-wrap { min-height: 1px; }
 
 /* ---- the reading frame: the listing as quoted shelter words ---- */
 
@@ -441,5 +468,5 @@ button:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .beat-line, .radio p { animation-duration: 1ms; }
-  .fade, .fade-quick, .reveal-photo, .run button, .run .btn { transition: none; }
+  .fade, .fade-quick, .reveal-photo, .run-screen, .run button, .run .btn { transition: none; }
 }

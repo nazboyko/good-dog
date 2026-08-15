@@ -138,6 +138,19 @@ export function revealedCount(elapsedMs: number, steps: Steps = REVEAL_STEPS): n
   return revealSchedule(steps).filter((s) => elapsedMs >= s.at).length;
 }
 
+// A screen transition breathes: the current screen fades out, a beat of
+// empty dark, then the next fades in. Never an instant swap. The fetch
+// for the next view runs under the fade out, so the network hides
+// inside the motion. Milliseconds.
+export const TRANSITION = { out: 360, dark: 240, in: 520 } as const;
+
+// transitionTimes returns how long to hold each phase given whether the
+// player prefers reduced motion. Reduced motion swaps instantly, but the
+// pressed button still disables so a double click cannot skip a beat.
+export function transitionTimes(reducedMotion: boolean): { out: number; dark: number } {
+  return reducedMotion ? { out: 0, dark: 0 } : { out: TRANSITION.out, dark: TRANSITION.dark };
+}
+
 // easeInOut is the curve the fold follow rides: it starts and ends at
 // rest, so the view never lurches. t in [0, 1] to progress in [0, 1].
 export function easeInOut(t: number): number {

@@ -33,6 +33,7 @@
 | Hotlinked photos plus dead urls | empty images in the epilogue | cache photos at sync |
 | Gemini free tier plus a burst of calls | 429 quota per minute | one shared client, 8 rpm queue, backoff honoring retryDelay, flash pinned |
 | Model lines retire for new projects | pinned model 429s with quota limit 0 while the key is fine | startup preflight lists models and warns, repin by hand |
+| overflow-x hidden on the flex shell | overflow-y forced to auto, the shell becomes its own scroll box, scrollable views paint black past the fold | clip horizontal overflow on html and body only, never on the shell, and never add position sticky under a body with overflow set |
 
 ## Steel thread spike, Friday, about one hour, before real work
 1. Go serves SSE through the Vite proxy and an event shows in the browser

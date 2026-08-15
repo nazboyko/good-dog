@@ -24,13 +24,17 @@ Anything quoted from a listing at length goes in `.quoted`: a measure around 65c
 
 Reserved space plus fade, never insert and push. Everything that appears or disappears is in the DOM from the first frame with its space held, and appearing only changes opacity: `.fade` at 520ms for quiet moments, `.fade-quick` at 200ms for interactive feedback, the reveal photo at 1400ms with its blur to sharp. Reduced motion sets every transition to none and touches no layout property, so it never reintroduces a jump. Photos reserve their box from real dimensions before they load. Details in the dog-perception skill under Presentation.
 
+## Screens breathe
+
+Every screen change is a transition, never a swap: the current screen fades out (360ms), a beat of empty dark (240ms), then the next screen fades in (520ms). Leaving is quicker than arriving. The fetch for the next view runs under the fade out, so the network hides inside the motion. The whole screen rides one opacity layer, `.run-screen`, driven by the run shell. The button that was pressed disables the moment it is clicked, so a double click cannot skip a beat. Reduced motion makes the swap instant but the disable still applies. A signal during the visitor beat is not a screen change: the panel and the narrator crossfade inside that screen. The timings live in `TRANSITION` in web/src/engine/run.ts and are unit tested against these ranges.
+
+## Composition
+
+Run screens (wake, scent, visitor, night, the reveal) are a centered composition, vertically centered in the viewport, and each one fits the viewport with no phantom scroll. The shell is border box so its padding lives inside the viewport height. The listing panel is the exception: it is a scrollable document, it opens at its top with the heading in view, and it scrolls as one page (never as a scroll box inside the shell, which paints as black past the fold). It calls `useViewTop()` on mount. Reserved space is a reveal staging rule and stays inside the reveal: the panel is its own view and the reveal is unmounted underneath it.
+
 ## The reveal fits the fold
 
-The reveal is sized to fit one viewport by design: the photo is capped by viewport height (50vh on wide screens, 42vh on phones, 40vh under 760px tall) and the lines tighten on short screens, so photo plus lines plus the button fit a phone, a tablet and a 720 tall laptop without scrolling. Verified at 390x844, 768x1024 and 1280x720. If a line would still land below the fold, the view eases down to it over 520ms in step with the fade, and any manual scroll cancels the follow for the rest of the reveal.
-
-## Views own their layout from zero
-
-Every view in the game opens at its top, with no dead space above or below. Each view calls `useViewTop()` on mount, which resets the scroll before the first paint, so the previous screen's offset never leaks into the next. The run shell is top aligned, not centered, so a short beat sits at the top and its button lands where a thumb can reach it. Reserved space is a reveal staging rule and stays inside the reveal: the About panel is its own view and the reveal is unmounted underneath it, never hidden in flow. The mobile pass checks this on every transition, top of content is within the top padding of the viewport and scrollY is zero.
+The reveal is sized to fit one viewport by design: the photo takes what is left after the lines, the button and the shell padding (measured at 488px) and never more than half the screen, `min(50vh, 100vh - 500px)`, with a tighter cap on phones (42vh) and a tighter line stack under 760px tall. Verified centered and inside the fold at 390x844, 584x867, 768x1024 and 1280x720. If a line would still land below the fold, the view eases down to it over 520ms in step with the fade, and any manual scroll cancels the follow for the rest of the reveal.
 
 ## Small screens
 
