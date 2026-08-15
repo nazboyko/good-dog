@@ -27,6 +27,8 @@ Gate 1, after writing code, before commit. Review the diff with fresh eyes, idea
 
 Gate 2, before commit. Run affected tests, then the full suite. If prompts or narrative changed, run the grounding evals. Run the end to end smoke of the core loop. A red test blocks the commit, no exceptions.
 
+Checking a test by reintroducing the bug it exists for is worth doing, and the way back is a file copy. Copy the file aside, mutate it, run, copy it back. Never `git checkout` over a path or a directory to clean up: an uncommitted unit lives only in the working tree and checkout deletes all of it, not just the mutation. This has already destroyed a finished unit once.
+
 Use the /ship command to run gates 1 and 2 and commit.
 
 ## Commits
