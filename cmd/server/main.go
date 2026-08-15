@@ -65,6 +65,7 @@ func main() {
 	mux.HandleFunc("GET /api/audio/{file}", httpapi.Audio("assets/audio", ttsCacheDir))
 	mux.HandleFunc("GET /api/spike/gemini", httpapi.SpikeGemini(geminiClient))
 	mux.HandleFunc("GET /api/spike/tts", httpapi.SpikeTTS(elevenClient, ttsCache, &elevenlabs.Budget{}))
+	mux.HandleFunc("GET /api/spike/subscription", httpapi.SpikeSubscription(elevenClient))
 
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

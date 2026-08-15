@@ -2,6 +2,7 @@ package elevenlabs
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -53,5 +54,24 @@ func TestBudgetAllow(t *testing.T) {
 	}
 	if err := b.Allow(100); err != nil {
 		t.Errorf("failed reservation must not eat budget: %v", err)
+	}
+}
+
+func TestGetSubscription(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("xi-api-key") != "test-key" {
+			t.Error("api key header missing")
+		}
+		fmt.Fprint(w, `{"tier":"creator","character_count":1234,"character_limit":100000,"next_character_count_reset_unix":1760000000}`)
+	}))
+	defer srv.Close()
+	c := New("test-key")
+	c.baseURL = srv.URL
+	sub, err := c.GetSubscription(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sub.Tier != "creator" || sub.Remaining() != 98766 {
+		t.Errorf("got %+v remaining %d", sub, sub.Remaining())
 	}
 }

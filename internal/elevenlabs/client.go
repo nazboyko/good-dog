@@ -68,3 +68,41 @@ func (c *Client) Synthesize(ctx context.Context, text, voiceID string, settings 
 	}
 	return data, nil
 }
+
+// Subscription is the slice of the user subscription endpoint the
+// budget report needs: characters used and the plan's cap.
+type Subscription struct {
+	Tier           string `json:"tier"`
+	CharacterCount int    `json:"character_count"`
+	CharacterLimit int    `json:"character_limit"`
+	NextResetUnix  int64  `json:"next_character_count_reset_unix"`
+}
+
+// Remaining is the credits left in the current period.
+func (s Subscription) Remaining() int { return s.CharacterLimit - s.CharacterCount }
+
+// GetSubscription reads the account's character usage and cap.
+func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/v1/user/subscription", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("xi-api-key", c.apiKey)
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("subscription status %d: %.200s", res.StatusCode, raw)
+	}
+	var sub Subscription
+	if err := json.Unmarshal(raw, &sub); err != nil {
+		return nil, fmt.Errorf("subscription response not json: %w", err)
+	}
+	return &sub, nil
+}
