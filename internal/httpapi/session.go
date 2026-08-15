@@ -64,7 +64,7 @@ func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not wake up right now", http.StatusServiceUnavailable)
 		return
 	}
-	s := session.New(dog, *org, sheet, h.now())
+	s := session.New(dog, *org, sheet, session.ShortRun, h.now())
 	h.store.Put(s)
 	writeJSON(w, http.StatusCreated, s.View(h.now()))
 }

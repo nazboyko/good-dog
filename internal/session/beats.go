@@ -15,10 +15,6 @@ const (
 	BeatDone     Beat = "done"
 )
 
-// rails is the whole prototype. A single day, one of everything, then
-// the reveal. Nothing branches yet.
-var rails = []Beat{BeatWake, BeatScent, BeatVisitor, BeatNight, BeatEpilogue, BeatDone}
-
 // Vocalization is the six option panel from the bark-input skill.
 // Silence is a deliberate choice, not the absence of one.
 type Vocalization string
@@ -41,14 +37,4 @@ func ValidVocalization(v Vocalization) bool {
 		}
 	}
 	return false
-}
-
-// next returns the beat after b, or done when the run is over.
-func next(b Beat) Beat {
-	for i, r := range rails {
-		if r == b && i+1 < len(rails) {
-			return rails[i+1]
-		}
-	}
-	return BeatDone
 }

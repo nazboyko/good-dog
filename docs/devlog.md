@@ -22,7 +22,9 @@ Three to five lines after every major block: what was decided, what was cut, wha
 - Day 0 closes with every Friday item done. About 110 live model calls total, well under a dollar of the 25.
 
 ## Day 1
--
+- The reveal landed on the first playtest until the photo, then a listing block turned the moment into a product card. Three passes fixed it: one line at a time after the photo in the opening rhythm, reserved space plus fade so nothing jumps by a pixel, and a button pair with the one loud thing on the screen. Every fix was measured, not eyeballed: the browser's own layout shift observer read zero across the whole reveal.
+- The session state machine landed as a pure function over a day table: Step(rails, state, input). The prototype's flat rails became the short run, the three day full run sits beside it, and a breadth first search over both proves every state reaches an ending. Persisted state refuses a version, beat or day this build does not know, so a resume can never guess.
+- Two traps for the article: overflow-x hidden on a flex shell forces overflow-y auto and paints a scrollable view black past the fold, and editing a shared engine module mid session left a Vite HMR graph with a stale import that only a dev server restart cleared. Both cost real time and neither was the code.
 
 ## Day 2
 -

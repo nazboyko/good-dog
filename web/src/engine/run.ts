@@ -44,9 +44,13 @@ export interface EpilogueView {
   listing: ListingRecord;
 }
 
+export type Ending = "chosen" | "another_dog" | "nobody_today";
+
 export interface View {
   session_id: string;
+  day: number;
   beat: Beat;
+  ending?: Ending;
   name: string;
   age_group: string;
   breed: string;

@@ -19,15 +19,15 @@ import (
 )
 
 // Session is one life. It holds the real dog and the sheet, but never
-// hands the client more than the current beat may know. The mutex
-// covers beat and signal, which handlers touch from many goroutines.
+// hands the client more than the current beat may know. The truth of
+// where the run is lives in state, driven only by Step. The mutex
+// covers state, which handlers touch from many goroutines.
 type Session struct {
-	ID        string
-	StartedAt time.Time
+	ID string
 
-	mu     sync.Mutex
-	beat   Beat
-	signal Vocalization
+	mu    sync.Mutex
+	rails Rails
+	state State
 
 	dog   animal.Animal
 	org   animal.Organization
@@ -38,7 +38,10 @@ type Session struct {
 // photo path physically does not exist in the payload until epilogue.
 type View struct {
 	SessionID string `json:"session_id"`
+	Day       int    `json:"day"`
 	Beat      Beat   `json:"beat"`
+	// set only once the run has ended, the reveal reads it
+	Ending Ending `json:"ending,omitempty"`
 	// the player knows only name, age group and breed at the start
 	Name     string `json:"name"`
 	AgeGroup string `json:"age_group"`
@@ -115,62 +118,72 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-func New(dog animal.Animal, org animal.Organization, sheet *dogsheet.DogSheet, now time.Time) *Session {
+func New(dog animal.Animal, org animal.Organization, sheet *dogsheet.DogSheet, rails Rails, now time.Time) *Session {
 	return &Session{
-		ID:        newID(),
-		StartedAt: now,
-		beat:      BeatWake,
-		dog:       dog,
-		org:       org,
-		sheet:     sheet,
+		ID:    newID(),
+		rails: rails,
+		state: NewState(rails, now),
+		dog:   dog,
+		org:   org,
+		sheet: sheet,
 	}
+}
+
+// Resume rebuilds a session around a persisted state.
+func Resume(id string, dog animal.Animal, org animal.Organization, sheet *dogsheet.DogSheet, rails Rails, state State) *Session {
+	return &Session{ID: id, rails: rails, state: state, dog: dog, org: org, sheet: sheet}
 }
 
 // Beat is the current beat, safe to read from any goroutine.
 func (s *Session) Beat() Beat {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.beat
+	return s.state.Beat
+}
+
+// State is a copy of the truth, for persistence. The bond slice is
+// copied too, so a caller can never reach the live history.
+func (s *Session) State() State {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.state
+	st.Bond = append([]Encounter{}, s.state.Bond...)
+	return st
+}
+
+// apply runs one input through the pure machine under the lock.
+func (s *Session) apply(in Input) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next, err := Step(s.rails, s.state, in)
+	if err != nil {
+		return err
+	}
+	s.state = next
+	return nil
 }
 
 // Advance moves to the next beat. The visitor beat refuses to advance
 // until the player has signaled, the visitor is waiting for an answer.
-func (s *Session) Advance() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.beat == BeatVisitor && s.signal == "" {
-		return fmt.Errorf("the visitor is waiting, choose a signal first")
-	}
-	if s.beat == BeatDone {
-		return fmt.Errorf("this life is over")
-	}
-	s.beat = next(s.beat)
-	return nil
-}
+func (s *Session) Advance() error { return s.apply(Input{Kind: InputAdvance}) }
 
 // Vocalize records the player's signal during the visitor beat.
 func (s *Session) Vocalize(v Vocalization) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.beat != BeatVisitor {
-		return fmt.Errorf("nobody is here to hear that right now")
-	}
-	if !ValidVocalization(v) {
-		return fmt.Errorf("unknown vocalization %q", v)
-	}
-	s.signal = v
-	return nil
+	return s.apply(Input{Kind: InputVocalize, Signal: v})
 }
 
 // View builds the client payload for the current beat and nothing more.
 func (s *Session) View(now time.Time) View {
 	s.mu.Lock()
-	beat, signal := s.beat, s.signal
+	st := s.state
 	s.mu.Unlock()
+	beat, signal, started := st.Beat, st.Signal, st.StartedAt
 
 	v := View{
 		SessionID: s.ID,
+		Day:       st.Day,
 		Beat:      beat,
+		Ending:    st.Ending,
 		Name:      s.dog.Name,
 		AgeGroup:  s.dog.AgeGroup,
 		Breed:     s.dog.Breed,
@@ -195,7 +208,7 @@ func (s *Session) View(now time.Time) View {
 		}
 		v.Night = &NightView{Story: story}
 	case BeatEpilogue, BeatDone:
-		v.Epilogue = s.epilogue(now)
+		v.Epilogue = s.epilogue(now, started)
 	}
 	return v
 }
@@ -213,7 +226,7 @@ func (s *Session) beforeReveal(line, fallback string) string {
 	return line
 }
 
-func (s *Session) epilogue(now time.Time) *EpilogueView {
+func (s *Session) epilogue(now, started time.Time) *EpilogueView {
 	// never nil: a default sheet has no quotes and the panel must not break
 	quotes := []string{}
 	for _, f := range s.sheet.Facts {
@@ -235,7 +248,7 @@ func (s *Session) epilogue(now time.Time) *EpilogueView {
 		OrgState:      StateName(s.org.State),
 		AgeWords:      AgeInWords(s.dog.AgeText),
 		LongStay:      s.dog.LongStay,
-		MinutesPlayed: int(now.Sub(s.StartedAt).Minutes()),
+		MinutesPlayed: int(now.Sub(started).Minutes()),
 		Listing: ListingRecord{
 			AgeText:          s.dog.AgeText,
 			WeightText:       s.dog.WeightText,

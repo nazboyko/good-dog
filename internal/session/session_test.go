@@ -41,7 +41,7 @@ func testSheet() *dogsheet.DogSheet {
 }
 
 func newTestSession() *Session {
-	return New(testDog, testOrg, testSheet(), t0)
+	return New(testDog, testOrg, testSheet(), ShortRun, t0)
 }
 
 func TestRailsRunInOrder(t *testing.T) {
@@ -219,7 +219,7 @@ func TestGeneratedLinesNamingTheShelterAreHeldBackBeforeReveal(t *testing.T) {
 	sheet := testSheet()
 	sheet.RadioSeed.Value = "Here is Venus, the pride of Ruff Start Rescue."
 	sheet.Movement.Value = "She bounces around Princeton like she owns it."
-	s := New(testDog, testOrg, sheet, t0)
+	s := New(testDog, testOrg, sheet, ShortRun, t0)
 
 	s.Advance()
 	if got := s.View(t0).Scent.Movement; got != "" {
@@ -269,5 +269,61 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 	if _, ok := st.Get("nope"); ok {
 		t.Fatal("unknown id must miss")
+	}
+}
+
+func TestResumeRebuildsTheSameLife(t *testing.T) {
+	s := newTestSession()
+	s.Advance()
+	s.Advance()
+	s.Vocalize(Whine)
+	raw, err := s.State().Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := UnmarshalState(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back := Resume(s.ID, testDog, testOrg, testSheet(), ShortRun, st)
+	if back.ID != s.ID || back.Beat() != BeatVisitor {
+		t.Fatalf("resume landed wrong: id %s beat %s", back.ID, back.Beat())
+	}
+	// the state copy must not alias the live history
+	copy1 := s.State()
+	if len(copy1.Bond) > 0 {
+		copy1.Bond[0].Signal = Howl
+	}
+	if len(s.State().Bond) > 0 && s.State().Bond[0].Signal == Howl {
+		t.Error("State() handed out the live bond slice")
+	}
+	a, b := s.View(t0), back.View(t0)
+	ja, _ := json.Marshal(a)
+	jb, _ := json.Marshal(b)
+	if string(ja) != string(jb) {
+		t.Errorf("resumed view differs:\n%s\n%s", ja, jb)
+	}
+	if err := back.Advance(); err != nil {
+		t.Fatalf("resumed session must keep playing: %v", err)
+	}
+	if back.View(t0).Day != 1 || back.Beat() != BeatNight {
+		t.Errorf("after resume and advance: day %d beat %s", back.View(t0).Day, back.Beat())
+	}
+}
+
+func TestViewCarriesDayAndEndingAtTheEnd(t *testing.T) {
+	s := newTestSession()
+	for s.Beat() != BeatEpilogue {
+		if s.Beat() == BeatVisitor {
+			s.Vocalize(Silence)
+		}
+		s.Advance()
+	}
+	v := s.View(t0)
+	if v.Day != 1 || v.Ending != EndingNobodyToday {
+		t.Errorf("epilogue view: day %d ending %q", v.Day, v.Ending)
+	}
+	if newTestSession().View(t0).Ending != EndingNone {
+		t.Error("no ending before the run ends")
 	}
 }
