@@ -18,6 +18,7 @@ import (
 	"github.com/nazboyko/good-dog/internal/dogsheet"
 	"github.com/nazboyko/good-dog/internal/gemini"
 	"github.com/nazboyko/good-dog/internal/session"
+	"github.com/nazboyko/good-dog/internal/visitor"
 )
 
 // stubProvider serves one dog with a real photo file on disk.
@@ -103,6 +104,26 @@ func newTestServer(t *testing.T) (*httptest.Server, string) {
 	return w.boot(t), w.photo
 }
 
+// playExchanges answers n exchanges over http and returns the view the
+// last one produced.
+func playExchanges(t *testing.T, base, signal string, n int) session.View {
+	t.Helper()
+	var v session.View
+	for i := 0; i < n; i++ {
+		if res, got := post(t, base+"/vocalize", `{"signal":"`+signal+`"}`); res.StatusCode == http.StatusOK {
+			v = got
+		} else {
+			t.Fatalf("exchange %d: vocalize got %d", i, res.StatusCode)
+		}
+		if res, got := post(t, base+"/advance", ""); res.StatusCode == http.StatusOK {
+			v = got
+		} else {
+			t.Fatalf("exchange %d: advance got %d", i, res.StatusCode)
+		}
+	}
+	return v
+}
+
 func post(t *testing.T, url, body string) (*http.Response, session.View) {
 	t.Helper()
 	res, err := http.Post(url, "application/json", strings.NewReader(body))
@@ -150,7 +171,14 @@ func TestSessionRunOnRails(t *testing.T) {
 	if v.Visitor == nil || v.Visitor.Mismatch == nil || v.Visitor.Mismatch.Meant == "" {
 		t.Fatalf("vocalize must return the narrator: %+v", v)
 	}
-	res, v = post(t, base+"/advance", "")
+	if v.Visitor.Body == "" || v.Visitor.Arc != "" {
+		t.Fatalf("the first answer reads a body but not the whole shape: %+v", v.Visitor)
+	}
+	// three more answers close the visit
+	if res, _ = post(t, base+"/advance", ""); res.StatusCode != http.StatusOK {
+		t.Fatalf("advance after the first answer got %d", res.StatusCode)
+	}
+	v = playExchanges(t, base, "whine", visitor.ExchangesPerScene-1)
 	if v.Beat != session.BeatNight || v.Night == nil || len(v.Night.Story) < 4 {
 		t.Fatalf("night beat: %+v", v)
 	}
@@ -242,10 +270,16 @@ func TestSessionResumesAcrossAServerRestart(t *testing.T) {
 	if after.Visitor.Mismatch == nil || after.Visitor.Mismatch.Heard != before.Visitor.Mismatch.Heard {
 		t.Errorf("the narrator must read the same after restart")
 	}
-	// and it keeps playing from exactly there
+	// and it keeps playing the same visit from exactly there
 	_, next := post(t, second.URL+base+"/advance", "")
+	if next.Beat != session.BeatVisitor || next.Visitor.Exchange != 2 {
+		t.Errorf("a resume mid visit continues the visit: %s exchange %d", next.Beat, next.Visitor.Exchange)
+	}
+	// the answer given before the restart was banked by that advance,
+	// so one is in the scene and three remain
+	next = playExchanges(t, second.URL+base, "whine", visitor.ExchangesPerScene-1)
 	if next.Beat != session.BeatNight {
-		t.Errorf("after restart and advance: %s", next.Beat)
+		t.Errorf("finishing the resumed visit moves the day on: %s", next.Beat)
 	}
 }
 

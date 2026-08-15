@@ -38,8 +38,22 @@ The reveal is sized to fit one viewport by design: the photo takes what is left 
 
 ## Reserved slots grow, they never hide
 
-Where two things swap in one reserved space (the vocalization panel and the narrator), stack them in a single grid cell rather than absolutely positioning both. Absolute children contribute no height, so longer copy overflows silently and no test catches it. In one grid cell the slot is at least its `min-height`, the reserved floor, and grows if the copy needs more. The floor is measured against the tallest real case plus headroom for one wrapped line: 285px desktop, 340px under 480px wide, checked at 320, 360, 390, 620 and 1280. Re-measure by injecting the longest line of each kind into the live slot and reading `getBoundingClientRect` against the slot.
+Where two things swap in one reserved space (the vocalization panel and the narrator), stack them in a single grid cell rather than absolutely positioning both. Absolute children contribute no height, so longer copy overflows silently and no test catches it. In one grid cell the slot is at least its `min-height`, the reserved floor, and grows if the copy needs more. The floor is measured against the tallest real case plus headroom for one wrapped line: 330px desktop, 405px under 480px wide, checked at 320, 390, 768 and 1280.
+
+Measure the floor by enumerating every close the engine can actually reach, not by pasting the longest line of each kind together. Those two numbers are different, and the difference is not small. A visitor close is five lines, and they are not independent: meant and heard always come from the same signal, and the body and the parting both come from the same band. Sticking the longest of each side by side gave 422px at 320 wide, where the real worst case any player can see is 369. Loop over archetype by signal by band by shape, write each set of five lines into the live slot, read `getBoundingClientRect` after each, and keep the tallest.
+
+When the reserved block is much taller than the panel that shares it, the panel is centered in the cell (`align-self: center`) so the space the close will need reads as breathing room rather than a hole. The acceptance test is not the height, it is that the lines above the slot do not move: sample the first arrival line's `top` before the click, all through the crossfade, and after.
+
+Re-measure whenever the copy changes, in both directions. Rewriting the close shortened the 320px worst case from 399 to 369, which retired a whole extra media query. A floor nobody rechecks only ever grows.
+
+## The control that ends a beat comes last
+
+Where a screen stages its lines, the button that carries the player forward waits for the last one and is disabled until it arrives. A button rendered at delay zero next to lines at 800ms and 1400ms is live before the player has read them, so a fast hand skips the ending. Fading it in is not enough on its own: an element at `opacity: 0` under `animation-fill-mode: both` is still clickable, so the wait has to disable it too. Delays live next to the transition timings in `web/src/engine/run.ts` and go to zero under reduced motion, where the disable still applies.
 
 ## Small screens
 
 Checked at 390 wide and 768 wide, whole run: no horizontal scroll anywhere, every tap target 44px or larger, the vocalization panel goes to two columns under 480px, the About facts stack to one column, and the photo never overflows. Safe area insets are respected on the sides.
+
+320 wide is the narrow end and it is checked too. A whole visitor close needs a little more room than the viewport is tall there, so the page scrolls by about 15px, but the button that carries the beat forward sits at 534 of 568 and is reachable without scrolling. That is the line: content may run past the fold, the control that moves the player never does.
+
+One warning about measuring any of this in a browser pane that is not fronted. When `document.hidden` is true the transitions do not tick and timers throttle to about a second, so computed opacity reads 0 on a layer that is fading in and a click can look like it did nothing while its request is still in flight. Layout is still correct, so `getBoundingClientRect` and class names can be trusted. Check `document.hidden` before reading anything animated, and assert the class the client applied rather than the opacity the browser has not got round to.

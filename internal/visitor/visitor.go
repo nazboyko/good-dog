@@ -33,11 +33,15 @@ var Signals = []Signal{PlayfulBark, AlertBark, Whine, LowGrowl, Howl, Silence}
 type Pronoun struct {
 	Subject    string
 	Possessive string
+	// Is is the verb that agrees with Subject. Every template that needs
+	// it writes {is} rather than the word, so a they/them visitor reads
+	// "they are still watching you" and not "they is".
+	Is string
 }
 
 var (
-	she = Pronoun{"she", "her"}
-	he  = Pronoun{"he", "his"}
+	she = Pronoun{"she", "her", "is"}
+	he  = Pronoun{"he", "his", "is"}
 )
 
 // Archetype is a kind of person who stops at a kennel. Preferences are
@@ -53,8 +57,9 @@ type Archetype struct {
 	// home, for reasons that are theirs and not the dog's. Their good
 	// outcome is parting well, and it is worth playing for.
 	CanChoose bool
-	// Because is why they cannot, in a few words. Empty when they can
-	// choose. The parting copy says it plainly in their own voice.
+	// Because is why they cannot, as the sentence the player reads.
+	// Empty when they can choose. Every parting this visitor can reach
+	// opens with it, so the reason is written here exactly once.
 	Because string
 }
 
@@ -83,7 +88,7 @@ var (
 		ID:      "here-for-another",
 		Pronoun: he,
 		Arrival: []string{
-			"A man stops in front of your kennel with a leash already in his hand.",
+			"A man is already holding a leash when he stops at your kennel.",
 			"He looks past you more than at you.",
 		},
 		// quiet is what reaches someone who is already passing through.
@@ -98,7 +103,7 @@ var (
 			LowGrowl:    -1,
 		},
 		CanChoose: false,
-		Because:   "he came for a dog he met last week",
+		Because:   "{They} came for a dog {they} met last week.",
 	}
 )
 
@@ -144,38 +149,81 @@ const (
 // Bands from least to most comfortable, the order the player feels.
 var Bands = []Band{BandDrifting, BandDistant, BandWatching, BandWarming, BandClose}
 
-// BandFor grades a comfort value. Comfort itself never leaves this
-// package as a number.
-func BandFor(comfort int) Band {
+// bandFor grades a comfort value. Comfort itself never leaves this
+// package at all, as a number or as a function. The thresholds are spread for a whole scene:
+// four exchanges at up to two each, so every rung is reachable and no
+// single answer decides the visit.
+func bandFor(comfort int) Band {
 	switch {
-	case comfort <= -2:
+	case comfort <= -4:
 		return BandDrifting
-	case comfort == -1:
+	case comfort <= -2:
 		return BandDistant
-	case comfort == 0:
+	case comfort <= 1:
 		return BandWatching
-	case comfort == 1:
+	case comfort <= 3:
 		return BandWarming
 	default:
 		return BandClose
 	}
 }
 
+// ExchangesPerScene is how many answers one visit is worth. A scene is
+// four to eight beats in the design, this is the short end.
+const ExchangesPerScene = 4
+
+// comfort adds up how a visit has gone so far. It stays in this
+// package: nothing outside ever sees the number.
+func comfort(a Archetype, signals []Signal) int {
+	total := 0
+	for _, s := range signals {
+		total += a.Prefers[s]
+	}
+	return total
+}
+
 // bodyTemplates are the whole readable language of comfort. One line
 // per band, each a different thing a body does, no two alike. The
 // placeholders are named, never positional, so rewriting a line can
-// never render a format error at a player.
+// never render a format error at a player. These are reactions, and
+// they are only ever used on the first answer of a visit.
 var bodyTemplates = map[Band]string{
 	BandDrifting: "{They} checks {their} phone.",
 	BandDistant:  "{They} glances down the row at the next kennel.",
-	BandWatching: "{They} stays where {they} is, watching you.",
+	BandWatching: "{They} keeps {their} eyes on you.",
 	BandWarming:  "{They} crouches down to your level.",
 	BandClose:    "{They} puts a hand flat against the gate.",
 }
 
-// BodyLanguage renders what the player sees for this band.
-func BodyLanguage(a Archetype, b Band) string {
-	tpl, ok := bodyTemplates[b]
+// settledTemplates are the same five rungs said as where the visitor
+// now stands rather than as an answer to the last thing the dog did.
+// From the second answer on, the narrator above names one signal while
+// the band underneath holds the whole visit, and the two read as cause
+// and effect unless the body says otherwise. Without the "still", a
+// growl on the last exchange looks like what put a hand on the gate.
+var settledTemplates = map[Band]string{
+	BandDrifting: "{They} has {their} phone out again.",
+	BandDistant:  "{They} {is} still looking down the row.",
+	BandWatching: "{They} still has {their} eyes on you.",
+	BandWarming:  "{They} {is} still crouched down at your level.",
+	BandClose:    "{They} has not taken {their} hand off the gate.",
+}
+
+// Body is what the player sees the visitor doing after the answers so
+// far. The first answer gets a reaction to itself, every answer after
+// that gets where the visit now stands.
+func Body(a Archetype, signals []Signal) string {
+	b := bandFor(comfort(a, signals))
+	if len(signals) <= 1 {
+		return a.render(bodyTemplates, b)
+	}
+	return a.render(settledTemplates, b)
+}
+
+// render fills one band's line, or nothing at all for a band that has
+// none. Never a placeholder and never a format error.
+func (a Archetype) render(table map[Band]string, b Band) string {
+	tpl, ok := table[b]
 	if !ok {
 		return ""
 	}
@@ -188,6 +236,7 @@ func (a Archetype) say(line string) string {
 		"{They}", capitalize(a.Pronoun.Subject),
 		"{they}", a.Pronoun.Subject,
 		"{their}", a.Pronoun.Possessive,
+		"{is}", a.Pronoun.Is,
 	).Replace(line)
 }
 
@@ -219,51 +268,135 @@ func OutcomeFor(a Archetype, b Band) Outcome {
 	}
 }
 
-// Parting is the last line of the visit. Consequence wording only: it
+// parting is the last line of the visit. Consequence wording only: it
 // says what happened, never how the player did, in the same present
 // tense as the arrival and the body. The band is here because parting
 // well should not read the same as parting politely.
-func Parting(a Archetype, o Outcome, b Band) string {
+//
+// A visitor who could never choose says why on every outcome, the cold
+// ones included. That is the whole exculpation, and the cold ones are
+// exactly where a player needs to hear it.
+func parting(a Archetype, o Outcome, b Band) string {
 	warm := b == BandWarming || b == BandClose
 	switch o {
 	case OutcomeAsked:
 		return a.say("{They} stops at the desk on the way out and asks your name.")
 	case OutcomeParted:
 		if a.Because == "" {
-			return a.say("{They} says goodbye through the gate.")
+			return a.say("{They} says goodbye on {their} way past.")
 		}
 		// someone who could never take this dog home still leaves
 		// differently for having stayed, and the line says what changed
 		if warm {
-			return a.say("{They} came for a dog {they} met last week. {They} is late for him now.")
+			return a.say(a.Because + " {They} {is} late for that one now.")
 		}
-		return a.say("{They} came for a dog {they} met last week. {They} says goodbye through the gate.")
+		return a.say(a.Because + " {They} says goodbye on {their} way past.")
 	default:
 		// the visit ending is not a verdict, so the beat lands back in
 		// the room rather than on the leaving
-		return a.say("{They} moves on. You put your chin back down on the cold floor.")
+		if a.Because != "" {
+			return a.say(a.Because + " You put your chin back down on the cold floor.")
+		}
+		return a.say("{They} carries on. You put your chin back down on the cold floor.")
 	}
 }
 
-// Result is everything one exchange leaves for the player to read.
-type Result struct {
-	Band    Band
-	Body    string
+// Ending is everything the close of a visit leaves behind.
+type Ending struct {
 	Outcome Outcome
+	Shape   Shape
+	// Body is where the visitor stands at the end of the visit
+	Body string
+	// Arc names the shape of the whole visit in one line
+	Arc     string
 	Parting string
 }
 
-// Meet is the whole comfort function for a single exchange: a signal
-// meets a person, and what comes back is a body, not a score.
-func Meet(a Archetype, s Signal) Result {
-	band := BandFor(a.Prefers[s])
+// Close reads the finished visit: where it ended, how it moved, and
+// what the visitor does on the way out.
+func Close(a Archetype, signals []Signal) Ending {
+	band := bandFor(comfort(a, signals))
 	outcome := OutcomeFor(a, band)
-	return Result{
-		Band:    band,
-		Body:    BodyLanguage(a, band),
+	shape := shapeOf(a, signals)
+	return Ending{
 		Outcome: outcome,
-		Parting: Parting(a, outcome, band),
+		Shape:   shape,
+		Body:    Body(a, signals),
+		Arc:     arcLine(a, shape),
+		Parting: parting(a, outcome, band),
 	}
+}
+
+// Shape is how a visit moved, read back at the end. It is a shape, not
+// a score: none of the four is a pass or a fail.
+type Shape string
+
+const (
+	ShapeWarmed Shape = "warmed"
+	ShapeCooled Shape = "cooled"
+	ShapeSteady Shape = "steady"
+	// ShapeTurned is a visit that moved and came back to where it began
+	ShapeTurned Shape = "turned"
+)
+
+// shapeOf walks the visit one answer at a time and names the movement.
+// It starts from where the visitor stood before the dog made a sound,
+// not from where the first answer left them, because "than when they
+// stopped" is what the arc line promises the player.
+func shapeOf(a Archetype, signals []Signal) Shape {
+	first := rungOf(bandFor(0))
+	last, low, high := first, first, first
+	total := 0
+	for _, s := range signals {
+		total += a.Prefers[s]
+		last = rungOf(bandFor(total))
+		low = min(low, last)
+		high = max(high, last)
+	}
+	switch {
+	case last > first:
+		return ShapeWarmed
+	case last < first:
+		return ShapeCooled
+	case high > first || low < first:
+		return ShapeTurned
+	default:
+		return ShapeSteady
+	}
+}
+
+// rungOf is how far up the ladder a band sits, so movement can be
+// compared. The ladder order is the only thing that carries meaning.
+func rungOf(b Band) int {
+	for i, x := range Bands {
+		if x == b {
+			return i
+		}
+	}
+	return 0
+}
+
+// arcLines name the shape in the same present tense as the rest of the
+// visit. Consequence wording: what moved, never how the player did.
+//
+// None of them names a rung. "Drifting" and "close" are band words, and
+// an arc that borrows one claims a position the visit may never have
+// touched. Turned covers a visit that went up and came back as well as
+// one that went down and came back, so it says neither.
+var arcLines = map[Shape]string{
+	ShapeWarmed: "{They} {is} closer now than when {they} stopped.",
+	ShapeCooled: "{They} {is} further off now than when {they} stopped.",
+	ShapeSteady: "{They} {is} no closer and no further than when {they} stopped.",
+	ShapeTurned: "{They} moves once in the middle and ends where {they} started.",
+}
+
+// arcLine renders the shape for this visitor.
+func arcLine(a Archetype, sh Shape) string {
+	line, ok := arcLines[sh]
+	if !ok {
+		return ""
+	}
+	return a.say(line)
 }
 
 func capitalize(s string) string {

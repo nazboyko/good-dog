@@ -43,6 +43,20 @@ func testSheet() *dogsheet.DogSheet {
 	}
 }
 
+// playVisit answers a whole visit through the session, the way a player
+// clicking one button four times would.
+func playVisit(t *testing.T, s *Session, v Vocalization) {
+	t.Helper()
+	for i := 0; i < visitor.ExchangesPerScene; i++ {
+		if err := s.Vocalize(v); err != nil {
+			t.Fatalf("exchange %d: %v", i, err)
+		}
+		if err := s.Advance(); err != nil {
+			t.Fatalf("exchange %d: %v", i, err)
+		}
+	}
+}
+
 func newTestSession() *Session {
 	return New(testDog, testOrg, testSheet(), ShortRun, t0)
 }
@@ -55,9 +69,8 @@ func TestRailsRunInOrder(t *testing.T) {
 			t.Fatalf("step %d: beat = %s, want %s", i, s.Beat(), beat)
 		}
 		if beat == BeatVisitor {
-			if err := s.Vocalize(Whine); err != nil {
-				t.Fatal(err)
-			}
+			playVisit(t, s, Whine)
+			continue
 		}
 		if beat == BeatDone {
 			if err := s.Advance(); err == nil {
@@ -229,8 +242,7 @@ func TestGeneratedLinesNamingTheShelterAreHeldBackBeforeReveal(t *testing.T) {
 		t.Errorf("movement naming the city must be dropped before the reveal, got %q", got)
 	}
 	s.Advance()
-	s.Vocalize(Silence)
-	s.Advance()
+	playVisit(t, s, Silence)
 	for _, line := range s.View(t0).Night.Story {
 		if strings.Contains(line, "Ruff Start") || strings.Contains(line, "Princeton") {
 			t.Errorf("radio line names the shelter before the reveal: %q", line)
@@ -314,8 +326,19 @@ func TestStoreResumesFromTheDBAfterARestart(t *testing.T) {
 	if string(before) != string(after) {
 		t.Errorf("view after restart differs:\n%s\n%s", before, after)
 	}
-	if err := back.Advance(); err != nil || back.Beat() != BeatNight {
-		t.Errorf("resumed session must keep playing: %v %s", err, back.Beat())
+	// the visit resumes mid scene and finishes where it left off
+	if err := back.Advance(); err != nil {
+		t.Fatalf("resumed session must keep playing: %v", err)
+	}
+	if back.Beat() != BeatVisitor || len(back.State().Scene) != 1 {
+		t.Errorf("a resume mid visit keeps the answers already given: %s %v", back.Beat(), back.State().Scene)
+	}
+	for i := 0; i < visitor.ExchangesPerScene-1; i++ {
+		back.Vocalize(Silence)
+		back.Advance()
+	}
+	if back.Beat() != BeatNight {
+		t.Errorf("finishing the resumed visit moves the day on, at %s", back.Beat())
 	}
 	// and a second Get returns the same rebuilt instance, not another copy
 	again, _ := st.Get(ctx, s.ID)
@@ -337,6 +360,50 @@ func TestStoreMissWhenTheLoaderCannotRebuild(t *testing.T) {
 	}
 }
 
+// State promises a copy a caller can scribble on. A shallow copy of the
+// struct always passes a scalar check, because the struct really is
+// copied. The slices inside it are what a shallow copy hands straight
+// back, so this writes through every one of them.
+func TestStateHandsOutNothingLive(t *testing.T) {
+	s := New(testDog, testOrg, testSheet(), FullRun, t0)
+	toVisitor := func() {
+		for s.Beat() != BeatVisitor {
+			if err := s.Advance(); err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+		}
+	}
+	toVisitor()
+	playVisit(t, s, Whine)
+	// a second visit, one answer in and taken, so a live scene and a
+	// closed encounter are both on the state at once
+	toVisitor()
+	if err := s.Vocalize(Silence); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := s.Advance(); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	loose := s.State()
+	if len(loose.Bond) == 0 || len(loose.Bond[0].Signals) == 0 || len(loose.Scene) == 0 {
+		t.Fatalf("setup: need a closed encounter and a live scene, got %+v", loose)
+	}
+	loose.Bond[0].Archetype = "tampered"
+	loose.Bond[0].Signals[0] = Howl
+	loose.Scene[0] = Howl
+
+	live := s.State()
+	if live.Bond[0].Archetype == "tampered" {
+		t.Error("State handed out the live bond slice")
+	}
+	if live.Bond[0].Signals[0] == Howl {
+		t.Error("State handed out the live signals inside an encounter")
+	}
+	if live.Scene[0] == Howl {
+		t.Error("State handed out the live scene")
+	}
+}
+
 func TestResumeRebuildsTheSameLife(t *testing.T) {
 	s := newTestSession()
 	s.Advance()
@@ -354,14 +421,6 @@ func TestResumeRebuildsTheSameLife(t *testing.T) {
 	if back.ID != s.ID || back.Beat() != BeatVisitor {
 		t.Fatalf("resume landed wrong: id %s beat %s", back.ID, back.Beat())
 	}
-	// the state copy must not alias the live history
-	copy1 := s.State()
-	if len(copy1.Bond) > 0 {
-		copy1.Bond[0].Signal = Howl
-	}
-	if len(s.State().Bond) > 0 && s.State().Bond[0].Signal == Howl {
-		t.Error("State() handed out the live bond slice")
-	}
 	a, b := s.View(t0), back.View(t0)
 	ja, _ := json.Marshal(a)
 	jb, _ := json.Marshal(b)
@@ -371,8 +430,16 @@ func TestResumeRebuildsTheSameLife(t *testing.T) {
 	if err := back.Advance(); err != nil {
 		t.Fatalf("resumed session must keep playing: %v", err)
 	}
-	if back.View(t0).Day != 1 || back.Beat() != BeatNight {
+	if back.View(t0).Day != 1 || back.Beat() != BeatVisitor {
 		t.Errorf("after resume and advance: day %d beat %s", back.View(t0).Day, back.Beat())
+	}
+	// and the rest of the visit still closes it
+	for i := 0; i < visitor.ExchangesPerScene-1; i++ {
+		back.Vocalize(Whine)
+		back.Advance()
+	}
+	if back.Beat() != BeatNight || len(back.State().Bond) != 1 {
+		t.Errorf("the resumed visit must close: %s %+v", back.Beat(), back.State().Bond)
 	}
 }
 
@@ -428,12 +495,27 @@ func TestVisitorViewCarriesBodyNotANumber(t *testing.T) {
 	if v.Visitor.Body != "" || v.Visitor.Parting != "" {
 		t.Error("nothing is read off a visitor before the player answers")
 	}
+	if v.Visitor.Exchange != 1 || v.Visitor.Exchanges != visitor.ExchangesPerScene {
+		t.Errorf("the view must say which answer this is: %+v", v.Visitor)
+	}
 	if err := s.Vocalize(Silence); err != nil {
 		t.Fatal(err)
 	}
 	v = s.View(t0)
-	if v.Visitor.Body == "" || v.Visitor.Parting == "" {
-		t.Fatalf("after an answer the visitor's body and parting must read: %+v", v.Visitor)
+	if v.Visitor.Body == "" {
+		t.Fatalf("after an answer the visitor's body must read: %+v", v.Visitor)
+	}
+	// the visit only reads back its shape once it is over
+	if v.Visitor.Arc != "" || v.Visitor.Parting != "" {
+		t.Errorf("the first answer must not end the visit: %+v", v.Visitor)
+	}
+	for i := 1; i < visitor.ExchangesPerScene; i++ {
+		s.Advance()
+		s.Vocalize(Silence)
+	}
+	v = s.View(t0)
+	if v.Visitor.Arc == "" || v.Visitor.Parting == "" {
+		t.Fatalf("the last answer must read back the shape and the parting: %+v", v.Visitor)
 	}
 	// comfort never reaches the player as a number
 	raw, _ := json.Marshal(v.Visitor)
@@ -449,20 +531,43 @@ func TestEncounterRecordsWhoCameAndHowItEnded(t *testing.T) {
 	s.Advance()
 	s.Advance()
 	who := s.State().VisitorAtGate()
-	s.Vocalize(Silence)
-	s.Advance()
+	// a visit is four exchanges, and only the last one ends it
+	for i := 0; i < visitor.ExchangesPerScene; i++ {
+		if len(s.State().Bond) != 0 {
+			t.Fatalf("the visit ended after %d exchanges, too early", i)
+		}
+		if err := s.Vocalize(Silence); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Advance(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	bond := s.State().Bond
 	if len(bond) != 1 {
 		t.Fatalf("one visit, one encounter: %+v", bond)
 	}
-	if bond[0].Archetype != who.ID || bond[0].Outcome == "" || bond[0].Signal != Silence {
-		t.Errorf("the encounter must name who came and what it left: %+v", bond[0])
+	if bond[0].Archetype != who.ID || bond[0].Outcome == "" || len(bond[0].Signals) != visitor.ExchangesPerScene {
+		t.Errorf("the encounter must name who came and every answer: %+v", bond[0])
+	}
+	// the shape reads back in one line, with no score in it
+	if bond[0].Arc == "" || bond[0].Shape == "" {
+		t.Errorf("the encounter must name the shape of the visit: %+v", bond[0])
+	}
+	if s.Beat() != BeatNight {
+		t.Errorf("the day moves on after the visit, at %s", s.Beat())
 	}
 }
 
 // The narrator and the visitor's body must never say opposite things.
 // A signal the visitor heard badly can never leave them at their
 // warmest, or the player learns the narrator cannot be trusted.
+//
+// This is the first answer of a visit, the only exchange where the two
+// lines are about the same thing. From the second answer on the
+// narrator still names one signal while the body holds the whole visit,
+// and the body says so in its own words. The visitor package owns that
+// half of the rule, because it is the one that can see both tables.
 func TestNarratorAndBodyNeverContradict(t *testing.T) {
 	// how each heard line reads, written down once, so a new signal or
 	// a new archetype cannot quietly break the pairing
@@ -477,13 +582,20 @@ func TestNarratorAndBodyNeverContradict(t *testing.T) {
 	if len(heardWarmth) != len(vocalizations) {
 		t.Fatalf("every signal needs a reading, have %d of %d", len(heardWarmth), len(vocalizations))
 	}
+	// the warmest two lines in the body vocabulary, named here rather
+	// than derived, so this still fails if the tables are reordered
+	warmest := []string{"crouches down to your level", "puts a hand flat against the gate"}
 	for _, a := range visitor.Archetypes {
 		for _, v := range vocalizations {
-			r := visitor.Meet(a, visitor.Signal(v))
-			warm := r.Band == visitor.BandWarming || r.Band == visitor.BandClose
-			if warm && heardWarmth[v] < 0 {
-				t.Errorf("%s: the narrator says %q was heard as %q, then the body says %q",
-					a.ID, v, Narrate(v).Heard, r.Body)
+			if heardWarmth[v] >= 0 {
+				continue
+			}
+			body := visitor.Body(a, []visitor.Signal{visitor.Signal(v)})
+			for _, phrase := range warmest {
+				if strings.Contains(body, phrase) {
+					t.Errorf("%s: the narrator says %q was heard as %q, then the body says %q",
+						a.ID, v, Narrate(v).Heard, body)
+				}
 			}
 		}
 	}

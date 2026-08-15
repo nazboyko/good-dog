@@ -264,6 +264,14 @@ html, body { overflow-x: hidden; }
 
 .beat-self { color: var(--ink-warm); font-style: italic; }
 
+/* the arc is the visit read back, a quieter register than the scene */
+.beat-arc { color: var(--ink-soft); font-style: italic; }
+
+/* the way forward waits for the last line of the close, so a fast hand
+   cannot skip what the visit just said. the button is disabled for the
+   same wait, because a faded out control is still a clickable one */
+.beat-late { animation: settle 900ms ease-out both; }
+
 .beat button { margin-top: 18px; }
 
 .panel {
@@ -278,15 +286,22 @@ html, body { overflow-x: hidden; }
    crossfade and the lines above never move. they stack in one grid cell
    rather than absolutely, so the slot can never be quietly overflowed
    by longer copy: it grows instead. min-height is the reserved floor,
-   measured against the tallest case (the second visitor answered with
-   a whine) plus headroom for one more wrapped line. */
+   measured in the browser against every close the engine can actually
+   reach (each visitor, each signal, each band, each shape) plus one
+   wrapped line, so a whole four exchange visit never shifts the
+   composition. Measured worst: 295 desktop and tablet, 372 at 390px,
+   369 at 320px, so two steps cover every width. */
 .visitor-slot {
   display: grid;
   margin-top: 8px;
-  min-height: 285px;
+  min-height: 330px;
 }
 
 .visitor-slot > * { grid-area: 1 / 1; align-self: start; }
+
+/* the panel sits in the middle of the reserved block, so the space the
+   close will need reads as breathing room and not as a hole */
+.visitor-slot .panel { align-self: center; }
 
 /* the rail marks the narrator's two lines only. what the visitor's body
    does is consequence, not commentary, so it sits outside the quote */
@@ -467,7 +482,7 @@ html, body { overflow-x: hidden; }
 @media (max-width: 480px) {
   .run { padding-top: 16px; padding-bottom: 16px; }
   .panel { grid-template-columns: repeat(2, 1fr); }
-  .visitor-slot { min-height: 340px; }
+  .visitor-slot { min-height: 405px; }
   .reveal-photo { max-height: 42vh; max-height: 42dvh; }
   .about-facts { grid-template-columns: 1fr; gap: 2px 0; }
   .about-facts dt { padding-top: 8px; }
@@ -478,6 +493,6 @@ html, body { overflow-x: hidden; }
 @media (prefers-reduced-motion: reduce) {
   /* important because the stagger delays are inline styles, and a
      reduced motion player must never wait on an empty slot */
-  .beat-line, .radio p { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+  .beat-line, .beat-late, .radio p { animation-duration: 1ms !important; animation-delay: 0ms !important; }
   .fade, .fade-quick, .reveal-photo, .run-screen, .run button, .run .btn { transition: none; }
 }

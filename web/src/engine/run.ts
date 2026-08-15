@@ -59,9 +59,12 @@ export interface View {
     arrival: string[];
     options: Vocalization[];
     heard_label: string;
+    exchange: number;
+    exchanges: number;
     signal?: Vocalization;
     mismatch?: Mismatch;
     body?: string;
+    arc?: string;
     parting?: string;
   };
   night?: { story: string[] };
@@ -193,11 +196,32 @@ export function revealedCount(elapsedMs: number, steps: Steps = REVEAL_STEPS): n
 // inside the motion. Milliseconds.
 export const TRANSITION = { out: 360, dark: 240, in: 520 } as const;
 
+// prefersReducedMotion asks the browser, at the moment we are about to
+// move something. Read live rather than cached: a player can change the
+// setting mid run and the next beat should honour it.
+export function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 // transitionTimes returns how long to hold each phase given whether the
 // player prefers reduced motion. Reduced motion swaps instantly, but the
 // pressed button still disables so a double click cannot skip a beat.
 export function transitionTimes(reducedMotion: boolean): { out: number; dark: number } {
   return reducedMotion ? { out: 0, dark: 0 } : { out: TRANSITION.out, dark: TRANSITION.dark };
+}
+
+// The close of a visit stages like a small reveal. The body lands first,
+// then the arc reads the whole visit back, then the parting. The button
+// comes after the last line: it is the only thing that can end the
+// scene, so if it arrives first a fast hand skips what the visit said.
+// Milliseconds, offset against the 900ms settle.
+export const CLOSE_STAGGER = { arc: 800, parting: 1400, button: 2000 } as const;
+
+// closeStagger returns those delays, or none at all for a player who
+// asked for reduced motion. The lines still arrive in order, they just
+// arrive at once, and the button is live immediately with them.
+export function closeStagger(reducedMotion: boolean): { arc: number; parting: number; button: number } {
+  return reducedMotion ? { arc: 0, parting: 0, button: 0 } : { ...CLOSE_STAGGER };
 }
 
 // easeInOut is the curve the fold follow rides: it starts and ends at

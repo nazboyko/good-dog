@@ -66,12 +66,19 @@ type VisitorView struct {
 	Options []Vocalization `json:"options"`
 	// the visitor's own pronoun for the narrator label, never a guess
 	HeardLabel string `json:"heard_label"`
+	// which answer of the visit this is, and how many the visit has,
+	// so the client knows whether one more is coming
+	Exchange  int `json:"exchange"`
+	Exchanges int `json:"exchanges"`
 	// set once the player has signaled
 	Signal   Vocalization `json:"signal,omitempty"`
 	Mismatch *Mismatch    `json:"mismatch,omitempty"`
 	// what the visitor's body says back, the only reading of comfort
-	// the player ever gets, and how the visit ended
-	Body    string `json:"body,omitempty"`
+	// the player ever gets
+	Body string `json:"body,omitempty"`
+	// set only on the last exchange: the shape of the whole visit and
+	// how they left
+	Arc     string `json:"arc,omitempty"`
 	Parting string `json:"parting,omitempty"`
 }
 
@@ -151,13 +158,19 @@ func (s *Session) Beat() Beat {
 	return s.state.Beat
 }
 
-// State is a copy of the truth, for persistence. The bond slice is
-// copied too, so a caller can never reach the live history.
+// State is a copy of the truth, for persistence. Every slice in it is
+// copied, so a caller can never reach the live history. That means the
+// scene in progress and the signals inside each encounter as well: a
+// copied struct still carries the original slice headers.
 func (s *Session) State() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.state
+	st.Scene = append([]Vocalization{}, s.state.Scene...)
 	st.Bond = append([]Encounter{}, s.state.Bond...)
+	for i := range st.Bond {
+		st.Bond[i].Signals = append([]Vocalization{}, st.Bond[i].Signals...)
+	}
 	return st
 }
 
@@ -207,14 +220,22 @@ func (s *Session) View(now time.Time) View {
 			Arrival:    who.Arrival,
 			Options:    vocalizations,
 			HeardLabel: who.Pronoun.Subject + " heard",
+			Exchange:   st.Exchange(),
+			Exchanges:  visitor.ExchangesPerScene,
 		}
 		if signal != "" {
 			m := Narrate(signal)
-			r := visitor.Meet(who, visitor.Signal(signal))
+			scene := st.SceneSoFar()
 			vv.Signal = signal
 			vv.Mismatch = &m
-			vv.Body = r.Body
-			vv.Parting = r.Parting
+			vv.Body = visitor.Body(who, scene)
+			// the visit only reads back its shape once it is over
+			if len(scene) >= visitor.ExchangesPerScene {
+				end := visitor.Close(who, scene)
+				vv.Body = end.Body
+				vv.Arc = end.Arc
+				vv.Parting = end.Parting
+			}
 		}
 		v.Visitor = vv
 	case BeatNight:

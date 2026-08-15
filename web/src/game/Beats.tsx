@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import type { View, Vocalization } from "../engine/run";
-import { VOCALIZATION_LABELS } from "../engine/run";
+import { VOCALIZATION_LABELS, closeStagger, prefersReducedMotion } from "../engine/run";
 import { forDisplay } from "../engine/display";
 
 // One small component per beat. Presentation only: the engine decides
@@ -47,6 +48,22 @@ export function Visitor({
   const visitor = view.visitor;
   if (!visitor) return null;
   const answered = Boolean(visitor.signal);
+  // the visit is several exchanges, only the last one ends the scene
+  const lastExchange = visitor.exchange >= visitor.exchanges;
+  // the close stages its lines, so the way forward waits for the last one
+  const closing = Boolean(visitor.arc || visitor.parting);
+  const stagger = closeStagger(prefersReducedMotion());
+  const wait = closing ? stagger.button : 0;
+  const [ready, setReady] = useState(wait === 0);
+  useEffect(() => {
+    if (wait === 0) {
+      setReady(true);
+      return;
+    }
+    setReady(false);
+    const t = window.setTimeout(() => setReady(true), wait);
+    return () => window.clearTimeout(t);
+  }, [wait, visitor.exchange]);
   // the panel and the narrator share one reserved slot: the panel fades
   // out and the narrator fades in over it, nothing above them moves
   return (
@@ -79,13 +96,27 @@ export function Visitor({
                 </p>
               </div>
               {visitor.body && <p className="beat-line">{visitor.body}</p>}
+              {visitor.arc && (
+                <p className="beat-line beat-arc" style={{ animationDelay: `${stagger.arc}ms` }}>
+                  {visitor.arc}
+                </p>
+              )}
               {visitor.parting && (
-                <p className="beat-line" style={{ animationDelay: "0.8s" }}>
+                <p className="beat-line" style={{ animationDelay: `${stagger.parting}ms` }}>
                   {visitor.parting}
                 </p>
               )}
-              <button onClick={onNext} disabled={busy}>
-                the day goes on
+              <button
+                className={closing ? "beat-late" : undefined}
+                style={closing ? { animationDelay: `${wait}ms` } : undefined}
+                onClick={onNext}
+                disabled={busy || !ready}
+                // the panel hides this whole layer between exchanges, and
+                // focus must not be left sitting inside an aria-hidden
+                // subtree three times a visit
+                tabIndex={answered ? 0 : -1}
+              >
+                {lastExchange ? "the day goes on" : "and then"}
               </button>
             </>
           )}

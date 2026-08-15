@@ -12,6 +12,19 @@ var adv = Input{Kind: InputAdvance}
 
 func say(v Vocalization) Input { return Input{Kind: InputVocalize, Signal: v} }
 
+// visit answers a whole scene with the same signal, the way a player
+// clicking one button four times would.
+func visit(t *testing.T, r Rails, s State, v Vocalization) State {
+	t.Helper()
+	for i := 0; i < visitor.ExchangesPerScene; i++ {
+		if s.Beat != BeatVisitor {
+			t.Fatalf("exchange %d: not at a visitor, at %s", i, s.Beat)
+		}
+		s = run(t, r, s, say(v), adv)
+	}
+	return s
+}
+
 // run drives a state through inputs, failing on any error.
 func run(t *testing.T, r Rails, s State, inputs ...Input) State {
 	t.Helper()
@@ -36,15 +49,19 @@ func TestShortRunIsThePrototypeRails(t *testing.T) {
 			break
 		}
 		if beat == BeatVisitor {
-			s = run(t, ShortRun, s, say(Whine))
+			s = visit(t, ShortRun, s, Whine)
+			continue
 		}
 		s = run(t, ShortRun, s, adv)
 	}
 	if s.Ending != EndingNobodyToday {
 		t.Errorf("a run with no adoption event ends nobody today, got %q", s.Ending)
 	}
-	if len(s.Bond) != 1 || s.Bond[0].Signal != Whine || s.Bond[0].Day != 1 {
-		t.Errorf("the one visitor must be in the bond history: %+v", s.Bond)
+	if len(s.Bond) != 1 || len(s.Bond[0].Signals) != visitor.ExchangesPerScene || s.Bond[0].Day != 1 {
+		t.Errorf("the one visitor must be in the bond history with every answer: %+v", s.Bond)
+	}
+	if s.Bond[0].Arc == "" || s.Bond[0].Shape == "" {
+		t.Errorf("the encounter must name the shape of the visit: %+v", s.Bond[0])
 	}
 }
 
@@ -53,8 +70,9 @@ func TestFullRunWalksThreeDaysAndTwoVisitorsADay(t *testing.T) {
 	visitors := 0
 	for guard := 0; guard < 100 && s.Beat != BeatDone; guard++ {
 		if s.Beat == BeatVisitor {
-			s = run(t, FullRun, s, say(Silence))
+			s = visit(t, FullRun, s, Silence)
 			visitors++
+			continue
 		}
 		s = run(t, FullRun, s, adv)
 	}
@@ -89,7 +107,7 @@ func TestVisitorRules(t *testing.T) {
 	}
 	s = run(t, ShortRun, s, say(Howl))
 	if _, err := Step(ShortRun, s, say(Whine)); err == nil {
-		t.Error("an answer is final, no second signal to the same visitor")
+		t.Error("an answer is final, no second signal to the same exchange")
 	}
 	if _, err := Step(ShortRun, NewState(ShortRun, t0), say(Howl)); err == nil {
 		t.Error("nobody to hear a signal at wake")
@@ -108,8 +126,43 @@ func TestStepNeverMutatesItsInput(t *testing.T) {
 	}
 }
 
+// A scene already holding answers is the case that can alias, and
+// marshalling the input will not catch it. Appending into the source
+// slice's spare capacity writes at index len without changing len, so
+// the input serializes identically and the test passes while one
+// branch of the game quietly overwrites another.
+//
+// Stepping the same state twice is what sees it: if the second call
+// writes through the shared backing array, it lands on top of the
+// answer the first call recorded.
+func TestSteppingOneStateTwiceKeepsBothAnswers(t *testing.T) {
+	s := run(t, ShortRun, NewState(ShortRun, t0), adv, adv, say(Whine), adv, say(Silence), adv)
+	if len(s.Scene) != 2 {
+		t.Fatalf("setup: want a scene holding two answers, got %v", s.Scene)
+	}
+	// spare capacity is what makes the aliasing bug invisible, so make
+	// sure there is some rather than hoping append left room
+	roomy := make([]Vocalization, len(s.Scene), len(s.Scene)+4)
+	copy(roomy, s.Scene)
+	s.Scene = roomy
+
+	howled := run(t, ShortRun, s, say(Howl), adv)
+	growled := run(t, ShortRun, s, say(LowGrowl), adv)
+
+	if got := howled.Scene[len(howled.Scene)-1]; got != Howl {
+		t.Errorf("the second Step reached back into the first: scene ends %s, want howl", got)
+	}
+	if got := growled.Scene[len(growled.Scene)-1]; got != LowGrowl {
+		t.Errorf("the second Step did not record its own answer: scene ends %s", got)
+	}
+	if len(s.Scene) != 2 {
+		t.Errorf("Step grew the scene it was handed: %v", s.Scene)
+	}
+}
+
 func TestDoneIsTerminal(t *testing.T) {
-	s := run(t, ShortRun, NewState(ShortRun, t0), adv, adv, say(Silence), adv, adv, adv)
+	s := visit(t, ShortRun, run(t, ShortRun, NewState(ShortRun, t0), adv, adv), Silence)
+	s = run(t, ShortRun, s, adv, adv)
 	if s.Beat != BeatDone {
 		t.Fatalf("setup: %s", s.Beat)
 	}
@@ -122,7 +175,11 @@ func TestDoneIsTerminal(t *testing.T) {
 }
 
 func TestStateRoundTripsThroughJSON(t *testing.T) {
-	s := run(t, FullRun, NewState(FullRun, t0), adv, adv, say(PlayfulBark), adv, say(Whine), adv, adv, adv)
+	// day one: wake, scent, both visitors answered in full, night, then day two
+	s := run(t, FullRun, NewState(FullRun, t0), adv, adv)
+	s = visit(t, FullRun, s, PlayfulBark)
+	s = visit(t, FullRun, s, Whine)
+	s = run(t, FullRun, s, adv, adv)
 	raw, err := s.Marshal()
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +192,6 @@ func TestStateRoundTripsThroughJSON(t *testing.T) {
 	if string(again) != string(raw) {
 		t.Errorf("round trip changed the state:\n%s\n%s", raw, again)
 	}
-	// day 1: wake, scent, visitor(bark), visitor(whine), night, then day 2 wake, scent
 	if back.Day != 2 || back.Beat != BeatScent || len(back.Bond) != 2 {
 		t.Errorf("resumed at the wrong place: day %d %s bond %d", back.Day, back.Beat, len(back.Bond))
 	}
@@ -158,7 +214,7 @@ func TestUnmarshalRefusesUnknownVersion(t *testing.T) {
 		t.Error("bad json must fail")
 	}
 	// a state saved with no bond array resumes with an empty one, not nil
-	s, err := UnmarshalState([]byte(`{"version":2,"day":1,"beat":"wake","started_at":"2026-08-15T09:00:00Z"}`))
+	s, err := UnmarshalState([]byte(`{"version":3,"day":1,"beat":"wake","started_at":"2026-08-15T09:00:00Z"}`))
 	if err != nil || s.Bond == nil {
 		t.Errorf("bond must never resume as nil: %v %+v", err, s)
 	}
@@ -199,15 +255,26 @@ func TestEveryReachableStateReachesAnEnding(t *testing.T) {
 }
 
 // stateKey collapses a state to what matters for reachability: the bond
-// history is summarized by length so the search space stays small.
+// history and the scene in progress are summarized by length so the
+// search space stays small.
+//
+// That is only safe while no transition reads what is inside them.
+// beatIndex reads visitorsToday, which is Day plus len(Bond), and
+// decideEnding ignores the bond entirely. The day decideEnding starts
+// reading it, as its comment says it will, two states with the same key
+// and different encounters will collapse into one and the search will
+// prune the path to whichever ending it did not expand. It will still
+// report success, which is the worst way for a proof to break. Add the
+// field here first.
 func stateKey(s State) string {
 	b, _ := json.Marshal(struct {
-		D int
-		B Beat
-		S Vocalization
-		N int
-		E Ending
-	}{s.Day, s.Beat, s.Signal, len(s.Bond), s.Ending})
+		D  int
+		B  Beat
+		S  Vocalization
+		Sc int
+		N  int
+		E  Ending
+	}{s.Day, s.Beat, s.Signal, len(s.Scene), len(s.Bond), s.Ending})
 	return string(b)
 }
 
@@ -218,7 +285,7 @@ func TestAdvanceRefusesAStateTheseRailsDoNotKnow(t *testing.T) {
 	s.Day = 1
 	s.Beat = BeatVisitor
 	s.Signal = Silence
-	s.Bond = []Encounter{{Day: 1, Signal: Whine}, {Day: 1, Signal: Howl}, {Day: 1, Signal: Silence}}
+	s.Bond = []Encounter{{Day: 1, Signals: []Vocalization{Whine}}, {Day: 1, Signals: []Vocalization{Howl}}, {Day: 1, Signals: []Vocalization{Silence}}}
 	if _, err := Step(ShortRun, s, adv); err == nil {
 		t.Fatal("a visitor beyond the rails must error, never restart the day")
 	}
@@ -231,9 +298,9 @@ func TestAdvanceRefusesAStateTheseRailsDoNotKnow(t *testing.T) {
 
 func TestUnmarshalRefusesUnknownBeatOrZeroDay(t *testing.T) {
 	for _, raw := range []string{
-		`{"version":2,"day":1,"beat":"brunch","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
-		`{"version":2,"day":0,"beat":"wake","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
-		`{"version":2,"day":1,"beat":"","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
+		`{"version":3,"day":1,"beat":"brunch","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
+		`{"version":3,"day":0,"beat":"wake","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
+		`{"version":3,"day":1,"beat":"","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
 	} {
 		if _, err := UnmarshalState([]byte(raw)); err == nil {
 			t.Errorf("must refuse: %s", raw)
@@ -254,8 +321,11 @@ func TestFullRunMeetsBothVisitorsAndRecordsHonestOutcomes(t *testing.T) {
 	}
 	met := map[string]visitor.Outcome{}
 	for _, e := range s.Bond {
-		if e.Archetype == "" || e.Outcome == "" {
-			t.Fatalf("every encounter must name who came and how it ended: %+v", e)
+		if e.Archetype == "" || e.Outcome == "" || e.Arc == "" {
+			t.Fatalf("every encounter must name who came, how it ended and its shape: %+v", e)
+		}
+		if len(e.Signals) != visitor.ExchangesPerScene {
+			t.Fatalf("every encounter holds the whole scene: %+v", e)
 		}
 		met[e.Archetype] = e.Outcome
 	}

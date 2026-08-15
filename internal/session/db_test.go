@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/nazboyko/good-dog/internal/visitor"
 )
 
 func openTestDB(t *testing.T) *DB {
@@ -21,7 +23,9 @@ func openTestDB(t *testing.T) *DB {
 func TestDBSaveLoadRoundTrip(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
-	state := run(t, FullRun, NewState(FullRun, t0), adv, adv, say(Whine), adv, say(Howl), adv, adv)
+	state := run(t, FullRun, NewState(FullRun, t0), adv, adv)
+	state = visit(t, FullRun, state, Whine)
+	state = visit(t, FullRun, state, Howl)
 	row := Row{ID: "abc", DogID: "rsmn-a-9548", OrgID: "ruff-start-rescue", Rails: FullRun.Name(), State: state, UpdatedAt: t0}
 	if err := db.Save(ctx, row); err != nil {
 		t.Fatal(err)
@@ -38,8 +42,8 @@ func TestDBSaveLoadRoundTrip(t *testing.T) {
 	if got.DogID != "rsmn-a-9548" || got.OrgID != "ruff-start-rescue" || got.Rails != "full" {
 		t.Errorf("row identity lost: %+v", got)
 	}
-	// a second save is a replace, not a duplicate: day 2 wake, scent, visitor, answer
-	state2 := run(t, FullRun, state, adv, adv, say(Silence))
+	// a second save is a replace, not a duplicate: on to day two and an answer
+	state2 := run(t, FullRun, state, adv, adv, adv, say(Silence))
 	row.State = state2
 	row.UpdatedAt = t0.Add(time.Minute)
 	if err := db.Save(ctx, row); err != nil {
@@ -74,7 +78,8 @@ func TestDBSurvivesRestart(t *testing.T) {
 	// the same file opened twice stands in for a server restart
 	path := filepath.Join(t.TempDir(), "sessions.db")
 	ctx := context.Background()
-	state := run(t, ShortRun, NewState(ShortRun, t0), adv, adv, say(Whine))
+	// mid visit: two answers given, two still to come
+	state := run(t, ShortRun, NewState(ShortRun, t0), adv, adv, say(Whine), adv, say(Silence))
 
 	first, err := OpenDB(path)
 	if err != nil {
@@ -99,10 +104,20 @@ func TestDBSurvivesRestart(t *testing.T) {
 	if string(a) != string(b) {
 		t.Errorf("state after restart differs:\n%s\n%s", a, b)
 	}
-	// and it keeps playing from exactly there
+	// and it keeps playing the same visit from exactly where it stopped
 	next := run(t, ShortRun, got.State, adv)
+	if next.Beat != BeatVisitor || len(next.Scene) != 2 {
+		t.Errorf("a resume mid visit must keep the answers already given: %+v", next)
+	}
+	// two answers were already given, so two finish the visit
+	for i := 0; i < visitor.ExchangesPerScene-2; i++ {
+		next = run(t, ShortRun, next, say(Silence), adv)
+	}
 	if next.Beat != BeatNight || len(next.Bond) != 1 {
-		t.Errorf("resumed state did not continue: %+v", next)
+		t.Errorf("finishing the resumed visit did not close it: %+v", next)
+	}
+	if len(next.Bond[0].Signals) != visitor.ExchangesPerScene {
+		t.Errorf("the resumed visit must remember every answer: %+v", next.Bond[0])
 	}
 }
 
