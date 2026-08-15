@@ -81,13 +81,13 @@ func (c *Client) GenerateJSON(ctx context.Context, prompt string, opts Options) 
 			return candidateText(raw)
 		}
 		if err == nil && !retryable(status) {
-			return nil, fmt.Errorf("gemini status %d: %.200s", status, raw)
+			return nil, &APIError{Status: status, Detail: fmt.Sprintf("%.200s", raw)}
 		}
 		if attempt >= len(c.backoff) {
 			if err != nil {
 				return nil, fmt.Errorf("gemini gave up after %d attempts: %w", attempt+1, err)
 			}
-			return nil, fmt.Errorf("gemini gave up after %d attempts, status %d: %.200s", attempt+1, status, raw)
+			return nil, &APIError{Status: status, Detail: fmt.Sprintf("gave up after %d attempts: %.200s", attempt+1, raw)}
 		}
 		delay := c.backoff[attempt]
 		if err == nil {
@@ -131,6 +131,17 @@ func (c *Client) post(ctx context.Context, payload []byte) (body []byte, status 
 		return nil, res.StatusCode, err
 	}
 	return raw, res.StatusCode, nil
+}
+
+// APIError is the typed path for api rejections and exhausted retries,
+// so callers can fall back to a cached default instead of crashing.
+type APIError struct {
+	Status int
+	Detail string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("gemini status %d: %s", e.Status, e.Detail)
 }
 
 // transport errors arrive as err and are retried like a 5xx

@@ -8,7 +8,7 @@
 - Frontend: Vite, TypeScript 5, React 18 for UI chrome only
 - Game engine is plain TS: own rAF loop, own state, draws to canvas via ref, React never renders the scene
 - Shader: WebGL1 compatible fragment shader, handle webglcontextlost and restore, 2D canvas fallback with CSS filters, cap devicePixelRatio at 2
-- Gemini: gemini flash, structured outputs with responseSchema, flat schemas, maxOutputTokens with 2x headroom, extraction at temperature 0.1, generation at 0.8, schema validation then one retry then cached default
+- Gemini: gemini flash, structured outputs with responseSchema, flat schemas, maxOutputTokens with 2x headroom, extraction at temperature 0.1, generation at 0.8, schema validation then one retry then a canned default that is never cached
 - ElevenLabs: library voices plus voice settings, not the voice design api, stories under 2500 chars, sfx generated once and cached forever, disk cache keyed by hash of text plus voice plus settings, budget guard counts characters before every call, Creator plan for one month
 - RescueGroups API v5 behind AnimalProvider, FixtureProvider until the key arrives, sync every 4 hours with polite pauses, sanitize html on input, cache photos locally at sync time, always link the original listing
 - Weather: Open-Meteo, no api key
