@@ -275,19 +275,18 @@ html, body { overflow-x: hidden; }
 .panel button { margin: 0; width: 100%; padding: 0 8px; }
 
 /* the panel and the narrator share one reserved slot, the swap is a
-   crossfade and the lines above never move */
+   crossfade and the lines above never move. they stack in one grid cell
+   rather than absolutely, so the slot can never be quietly overflowed
+   by longer copy: it grows instead. min-height is the reserved floor,
+   measured against the tallest case (the second visitor answered with
+   a whine) plus headroom for one more wrapped line. */
 .visitor-slot {
-  position: relative;
+  display: grid;
   margin-top: 8px;
-  min-height: 250px;
+  min-height: 285px;
 }
 
-.visitor-slot .panel { position: absolute; inset: 0 0 auto 0; }
-
-.narrator {
-  position: absolute;
-  inset: 0 0 auto 0;
-}
+.visitor-slot > * { grid-area: 1 / 1; align-self: start; }
 
 /* the rail marks the narrator's two lines only. what the visitor's body
    does is consequence, not commentary, so it sits outside the quote */
@@ -468,7 +467,7 @@ html, body { overflow-x: hidden; }
 @media (max-width: 480px) {
   .run { padding-top: 16px; padding-bottom: 16px; }
   .panel { grid-template-columns: repeat(2, 1fr); }
-  .visitor-slot { min-height: 310px; }
+  .visitor-slot { min-height: 340px; }
   .reveal-photo { max-height: 42vh; max-height: 42dvh; }
   .about-facts { grid-template-columns: 1fr; gap: 2px 0; }
   .about-facts dt { padding-top: 8px; }

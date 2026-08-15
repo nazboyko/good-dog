@@ -36,6 +36,10 @@ Run screens (wake, scent, visitor, night, the reveal) are a centered composition
 
 The reveal is sized to fit one viewport by design: the photo takes what is left after the lines, the button and the shell padding (measured at 488px) and never more than half the screen, `min(50vh, 100vh - 500px)`, with a tighter cap on phones (42vh) and a tighter line stack under 760px tall. Verified centered and inside the fold at 390x844, 584x867, 768x1024 and 1280x720. If a line would still land below the fold, the view eases down to it over 520ms in step with the fade, and any manual scroll cancels the follow for the rest of the reveal.
 
+## Reserved slots grow, they never hide
+
+Where two things swap in one reserved space (the vocalization panel and the narrator), stack them in a single grid cell rather than absolutely positioning both. Absolute children contribute no height, so longer copy overflows silently and no test catches it. In one grid cell the slot is at least its `min-height`, the reserved floor, and grows if the copy needs more. The floor is measured against the tallest real case plus headroom for one wrapped line: 285px desktop, 340px under 480px wide, checked at 320, 360, 390, 620 and 1280. Re-measure by injecting the longest line of each kind into the live slot and reading `getBoundingClientRect` against the slot.
+
 ## Small screens
 
 Checked at 390 wide and 768 wide, whole run: no horizontal scroll anywhere, every tap target 44px or larger, the vocalization panel goes to two columns under 480px, the About facts stack to one column, and the photo never overflows. Safe area insets are respected on the sides.
