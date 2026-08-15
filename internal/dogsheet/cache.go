@@ -13,7 +13,8 @@ import (
 )
 
 // Dog sheets are cached forever. The key carries the description hash
-// so an updated listing compiles fresh instead of serving stale truth.
+// and the prompt version so an updated listing or an updated prompt
+// compiles fresh instead of serving stale truth.
 type Cache struct {
 	root string
 }
@@ -23,7 +24,7 @@ func NewCache(root string) *Cache {
 }
 
 func (c *Cache) key(a animal.Animal) string {
-	sum := sha256.Sum256([]byte(a.Description))
+	sum := sha256.Sum256([]byte(promptVersion + "\x00" + a.Description))
 	safe := strings.Map(func(r rune) rune {
 		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' {
 			return r

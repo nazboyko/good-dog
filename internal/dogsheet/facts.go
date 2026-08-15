@@ -79,6 +79,12 @@ func VerifiedDescriptionFacts(extracted []string, description string, startAt in
 			dropped = append(dropped, value)
 			continue
 		}
+		// a real quote can still carry adoption history, the word adopted
+		// belongs to ADOPTED_CONFIRMED and nowhere else in the game
+		if strings.Contains(norm, "adopt") {
+			dropped = append(dropped, value)
+			continue
+		}
 		kept = append(kept, VerifiedFact{
 			ID:          fmt.Sprintf("f%d", startAt+len(kept)+1),
 			Value:       value,

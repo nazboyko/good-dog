@@ -67,6 +67,9 @@ func TestVerifySheetRejectsViolations(t *testing.T) {
 		"urgency language": func(s *DogSheet) {
 			s.RadioSeed.Value = "This is her last chance, folks."
 		},
+		"invented age stereotype": func(s *DogSheet) {
+			s.RadioSeed.Value = "A gentle senior who is slowing down."
+		},
 		"description fact that is not a quote": func(s *DogSheet) {
 			s.Facts = append(s.Facts, VerifiedFact{ID: "f4", Value: "champion frisbee dog", Source: "description"})
 		},

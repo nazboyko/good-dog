@@ -2,6 +2,8 @@ package dogsheet
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"testing"
@@ -85,6 +87,50 @@ func TestCompileHappyPath(t *testing.T) {
 	}
 	if strings.Contains(llm.prompts[1], testDog.Description) {
 		t.Error("generation prompt must never see the raw description")
+	}
+}
+
+func TestUncitedVoiceAndMovementSnapToNeutral(t *testing.T) {
+	flourish := strings.ReplaceAll(goodSheet,
+		`"voice": {"value": "soft huffs, big tail", "cites": ["f6"]}`,
+		`"voice": {"value": "a quiet, bright presence", "cites": []}`)
+	llm := &fakeLLM{responses: []string{goodExtraction, flourish}}
+	sheet, err := newTestCompiler(t, llm).Compile(context.Background(), testDog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sheet.Voice.Value != neutralVoice || len(sheet.Voice.DerivedFrom) != 0 {
+		t.Errorf("uncited voice must snap to the neutral line, got %+v", sheet.Voice)
+	}
+	if sheet.Movement.Value != "keeps low the first day, then bounces" {
+		t.Errorf("cited movement must survive untouched, got %+v", sheet.Movement)
+	}
+}
+
+func TestCompileDropsAdoptionHistoryFacts(t *testing.T) {
+	dog := testDog
+	dog.Description = testDog.Description + " Was adopted in October and returned."
+	extraction := `{"facts":["Loves tennis balls and belly rubs","Was adopted in October and returned"]}`
+	llm := &fakeLLM{responses: []string{extraction, goodSheetWithoutF7F8(t)}}
+	sheet, err := newTestCompiler(t, llm).Compile(context.Background(), dog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range sheet.Facts {
+		if strings.Contains(strings.ToLower(f.Value), "adopt") {
+			t.Fatalf("adoption history must never become a fact: %q", f.Value)
+		}
+	}
+}
+
+func TestCacheKeyCoversPromptVersion(t *testing.T) {
+	c := NewCache(t.TempDir())
+	// the key must differ from a key built without the version, so a
+	// sheet compiled under old rules is never served after a prompt edit
+	withVersion := c.key(testDog)
+	plain := sha256.Sum256([]byte(testDog.Description))
+	if strings.Contains(withVersion, hex.EncodeToString(plain[:4])) {
+		t.Fatal("cache key ignores the prompt version")
 	}
 }
 

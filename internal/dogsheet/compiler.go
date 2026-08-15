@@ -41,7 +41,7 @@ func (c *Compiler) Compile(ctx context.Context, a animal.Animal) (*DogSheet, err
 	}
 	kept, dropped := VerifiedDescriptionFacts(extracted, a.Description, len(facts), a.RetrievedAt)
 	if len(dropped) > 0 {
-		log.Printf("dog sheet %s: dropped %d unverifiable extracted facts", a.ID, len(dropped))
+		log.Printf("dog sheet %s: dropped %d extracted facts, not verbatim or adoption history", a.ID, len(dropped))
 	}
 	facts = append(facts, kept...)
 
@@ -58,7 +58,7 @@ func (c *Compiler) Compile(ctx context.Context, a animal.Animal) (*DogSheet, err
 // extract asks for verbatim quotes, retrying once on bad output.
 func (c *Compiler) extract(ctx context.Context, description string) ([]string, error) {
 	prompt := fmt.Sprintf(extractFactsPrompt, neutralizeSentinel(description))
-	opts := gemini.Options{Temperature: 0.1, MaxOutputTokens: 512, ResponseSchema: extractFactsSchema, DisableThinking: true}
+	opts := gemini.Options{Temperature: 0.1, MaxOutputTokens: 1024, ResponseSchema: extractFactsSchema, DisableThinking: true}
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
 		raw, err := c.llm.GenerateJSON(ctx, prompt, opts)
@@ -177,8 +177,8 @@ func parseSheet(raw []byte, a animal.Animal, facts []VerifiedFact) (*DogSheet, e
 			FoodDrive:        axis(p.Matrix.FoodDrive),
 			NoiseSensitivity: axis(p.Matrix.NoiseSensitivity),
 		},
-		Movement:   NarrativeInference{Value: p.Movement.Value, DerivedFrom: p.Movement.Cites, Category: CategoryBehavior},
-		Voice:      NarrativeInference{Value: p.Voice.Value, DerivedFrom: p.Voice.Cites, Category: CategorySensory},
+		Movement:   neutralUnlessCited(p.Movement, neutralMovement, CategoryBehavior),
+		Voice:      neutralUnlessCited(p.Voice, neutralVoice, CategorySensory),
 		RadioSeed:  NarrativeInference{Value: p.RadioSeed.Value, DerivedFrom: p.RadioSeed.Cites, Category: CategoryTone},
 		CompiledAt: time.Now().UTC(),
 	}
@@ -189,6 +189,21 @@ func parseSheet(raw []byte, a animal.Animal, facts []VerifiedFact) (*DogSheet, e
 		sheet.Quirks = append(sheet.Quirks, NarrativeInference{Value: q.Value, DerivedFrom: q.Cites, Category: CategoryBehavior})
 	}
 	return sheet, nil
+}
+
+// The neutral lines used whenever the model has no fact to stand on.
+// The model was told to be plainly neutral with empty cites but writes
+// flourishes instead, so uncited voice and movement snap to these.
+const (
+	neutralMovement = "settles into new places at an easy pace"
+	neutralVoice    = "quiet until something matters"
+)
+
+func neutralUnlessCited(cv citedValue, neutral, category string) NarrativeInference {
+	if len(cv.Cites) == 0 {
+		return NarrativeInference{Value: neutral, Category: category}
+	}
+	return NarrativeInference{Value: cv.Value, DerivedFrom: cv.Cites, Category: category}
 }
 
 // DefaultSheet is the canned default from the tech stack rules: neutral,
@@ -209,8 +224,8 @@ func DefaultSheet(a animal.Animal, facts []VerifiedFact) *DogSheet {
 			Energy: neutral, Confidence: neutral, Sociability: neutral,
 			Patience: neutral, FoodDrive: neutral, NoiseSensitivity: neutral,
 		},
-		Movement:   NarrativeInference{Value: "settles into new places at an easy pace", Category: CategoryBehavior},
-		Voice:      NarrativeInference{Value: "quiet until something matters", Category: CategorySensory},
+		Movement:   NarrativeInference{Value: neutralMovement, Category: CategoryBehavior},
+		Voice:      NarrativeInference{Value: neutralVoice, Category: CategorySensory},
 		RadioSeed:  NarrativeInference{Value: fmt.Sprintf("%s is here tonight, and that is a good thing.", a.Name), DerivedFrom: seedCites, Category: CategoryTone},
 		Default:    true,
 		CompiledAt: time.Now().UTC(),

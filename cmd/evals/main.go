@@ -45,6 +45,7 @@ func main() {
 	profilesPath := flag.String("profiles", "evals/profiles.json", "eval dataset")
 	fixtureIDs := flag.String("fixture", "", "comma separated fixture dog ids to compile and print instead of running evals")
 	only := flag.String("only", "", "comma separated profile ids, everything else is skipped")
+	show := flag.Bool("show", false, "print the full sheet for every failing profile")
 	flag.Parse()
 
 	if err := config.LoadDotEnv(".env"); err != nil {
@@ -60,7 +61,7 @@ func main() {
 		compileFixtures(llm, strings.Split(*fixtureIDs, ","))
 		return
 	}
-	runEvals(llm, *profilesPath, *only)
+	runEvals(llm, *profilesPath, *only, *show)
 }
 
 // compileFixtures uses the real sheet cache, evals never do.
@@ -88,7 +89,7 @@ func compileFixtures(llm *gemini.Client, ids []string) {
 // about grounding, and burning retries on it makes the starvation worse.
 var errQuotaExhausted = fmt.Errorf("quota exhausted")
 
-func runEvals(llm *gemini.Client, path, only string) {
+func runEvals(llm *gemini.Client, path, only string, show bool) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		fatal("read profiles: %v", err)
@@ -126,7 +127,7 @@ func runEvals(llm *gemini.Client, path, only string) {
 	failed := 0
 	start := time.Now()
 	for i, p := range selected {
-		problems, err := runProfile(compiler, p)
+		problems, sheet, err := runProfile(compiler, p)
 		if err != nil {
 			fmt.Printf("\nquota exhausted at profile %s, %d of %d done, aborting the run\n", p.ID, i, len(selected))
 			fmt.Println("this is starvation, not a grounding failure, rerun when the window resets")
@@ -140,6 +141,10 @@ func runEvals(llm *gemini.Client, path, only string) {
 		for _, problem := range problems {
 			fmt.Printf("FAIL %s: %s\n", p.ID, problem)
 		}
+		if show && sheet != nil {
+			out, _ := json.MarshalIndent(sheet, "", "  ")
+			fmt.Printf("--- sheet for %s ---\n%s\n", p.ID, out)
+		}
 	}
 	fmt.Printf("\n%d profiles, %d failed, %s\n", len(selected), failed, time.Since(start).Round(time.Second))
 	if failed > 0 {
@@ -147,7 +152,7 @@ func runEvals(llm *gemini.Client, path, only string) {
 	}
 }
 
-func runProfile(compiler *dogsheet.Compiler, p profile) ([]string, error) {
+func runProfile(compiler *dogsheet.Compiler, p profile) ([]string, *dogsheet.DogSheet, error) {
 	a := animal.Animal{
 		ID: "eval-" + p.ID, Name: p.Name, Breed: p.Breed, AgeGroup: p.AgeGroup,
 		AgeText: p.AgeText, Sex: p.Sex, Size: p.Size, WeightText: p.WeightText,
@@ -159,12 +164,12 @@ func runProfile(compiler *dogsheet.Compiler, p profile) ([]string, error) {
 	if errors.As(err, &degraded) {
 		var apiErr *gemini.APIError
 		if errors.As(degraded, &apiErr) && apiErr.Status == 429 {
-			return nil, errQuotaExhausted
+			return nil, nil, errQuotaExhausted
 		}
-		return []string{fmt.Sprintf("served the default sheet: %v", degraded.Cause)}, nil
+		return []string{fmt.Sprintf("served the default sheet: %v", degraded.Cause)}, sheet, nil
 	}
 	if err != nil {
-		return []string{fmt.Sprintf("compile error: %v", err)}, nil
+		return []string{fmt.Sprintf("compile error: %v", err)}, nil, nil
 	}
 
 	var problems []string
@@ -225,7 +230,7 @@ func runProfile(compiler *dogsheet.Compiler, p profile) ([]string, error) {
 			}
 		}
 	}
-	return problems, nil
+	return problems, sheet, nil
 }
 
 func axesOf(s *dogsheet.DogSheet) map[string]dogsheet.Axis {

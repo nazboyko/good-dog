@@ -15,6 +15,8 @@ var forbiddenIfInvented = map[string][]string{
 	"medical":    {"arthritis", "cancer", "sick", "illness", "diagnosed", "medication", "meds", "blind", "deaf", "heartworm", "injury", "injured", "surgery"},
 	"aggression": {"aggressive", "aggression", "reactive", "reactivity", "bites", "bite history", "has bitten", "attacks", "dangerous"},
 	"shelter":    {"staff", "volunteer", "came to us", "been here", "been waiting", "waiting for"},
+	// age stereotypes: a senior listed as high energy must not become a gentle senior
+	"age": {"gentle senior", "calm senior", "sweet senior", "slowing down", "slows down", "golden years", "gray muzzle", "grey muzzle", "for her age", "for his age", "getting older", "old age", "puppy energy", "just a puppy"},
 }
 
 // These classes are forbidden in generated text no matter what the
