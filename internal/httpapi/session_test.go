@@ -89,7 +89,7 @@ func (w testWorld) boot(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	h := NewSessions(w.provider, w.compiler, db, "rsmn-a-9548")
+	h := NewSessions(w.provider, w.compiler, db, session.ShortRun, "rsmn-a-9548")
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := httptest.NewServer(mux)
@@ -192,7 +192,7 @@ func TestPinnedDogMustBeRealAndActive(t *testing.T) {
 	dir := t.TempDir()
 	fake := animal.Animal{ID: "example-1", Name: "Biscuit", Synthetic: true, Status: animal.StatusActive}
 	compiler := dogsheet.NewCompiler(nil, dogsheet.NewCache(filepath.Join(dir, "sheets")))
-	h := NewSessions(stubProvider{dog: fake, org: animal.Organization{ID: "org"}}, compiler, nil, "example-1")
+	h := NewSessions(stubProvider{dog: fake, org: animal.Organization{ID: "org"}}, compiler, nil, session.ShortRun, "example-1")
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := httptest.NewServer(mux)

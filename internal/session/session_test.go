@@ -10,6 +10,7 @@ import (
 
 	"github.com/nazboyko/good-dog/internal/animal"
 	"github.com/nazboyko/good-dog/internal/dogsheet"
+	"github.com/nazboyko/good-dog/internal/visitor"
 )
 
 var (
@@ -389,5 +390,101 @@ func TestViewCarriesDayAndEndingAtTheEnd(t *testing.T) {
 	}
 	if newTestSession().View(t0).Ending != EndingNone {
 		t.Error("no ending before the run ends")
+	}
+}
+
+// The visitor package keeps its own signal vocabulary so it never has
+// to import the game state. This is the guard that the two never drift.
+func TestVocalizationsAndVisitorSignalsNeverDrift(t *testing.T) {
+	if len(vocalizations) != len(visitor.Signals) {
+		t.Fatalf("%d vocalizations, %d visitor signals", len(vocalizations), len(visitor.Signals))
+	}
+	for _, v := range vocalizations {
+		found := false
+		for _, s := range visitor.Signals {
+			if string(s) == string(v) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("vocalization %s has no visitor signal", v)
+		}
+		for _, a := range visitor.Archetypes {
+			if _, ok := a.Prefers[visitor.Signal(v)]; !ok {
+				t.Errorf("archetype %s has no opinion about %s", a.ID, v)
+			}
+		}
+	}
+}
+
+func TestVisitorViewCarriesBodyNotANumber(t *testing.T) {
+	s := newTestSession()
+	s.Advance()
+	s.Advance()
+	v := s.View(t0)
+	if v.Visitor == nil || len(v.Visitor.Arrival) == 0 || v.Visitor.HeardLabel == "" {
+		t.Fatalf("the visitor must arrive with lines and a narrator label: %+v", v.Visitor)
+	}
+	if v.Visitor.Body != "" || v.Visitor.Parting != "" {
+		t.Error("nothing is read off a visitor before the player answers")
+	}
+	if err := s.Vocalize(Silence); err != nil {
+		t.Fatal(err)
+	}
+	v = s.View(t0)
+	if v.Visitor.Body == "" || v.Visitor.Parting == "" {
+		t.Fatalf("after an answer the visitor's body and parting must read: %+v", v.Visitor)
+	}
+	// comfort never reaches the player as a number
+	raw, _ := json.Marshal(v.Visitor)
+	for _, word := range []string{"comfort", "score", "band"} {
+		if strings.Contains(strings.ToLower(string(raw)), word) {
+			t.Errorf("the visitor view leaks %q: %s", word, raw)
+		}
+	}
+}
+
+func TestEncounterRecordsWhoCameAndHowItEnded(t *testing.T) {
+	s := newTestSession()
+	s.Advance()
+	s.Advance()
+	who := s.State().VisitorAtGate()
+	s.Vocalize(Silence)
+	s.Advance()
+	bond := s.State().Bond
+	if len(bond) != 1 {
+		t.Fatalf("one visit, one encounter: %+v", bond)
+	}
+	if bond[0].Archetype != who.ID || bond[0].Outcome == "" || bond[0].Signal != Silence {
+		t.Errorf("the encounter must name who came and what it left: %+v", bond[0])
+	}
+}
+
+// The narrator and the visitor's body must never say opposite things.
+// A signal the visitor heard badly can never leave them at their
+// warmest, or the player learns the narrator cannot be trusted.
+func TestNarratorAndBodyNeverContradict(t *testing.T) {
+	// how each heard line reads, written down once, so a new signal or
+	// a new archetype cannot quietly break the pairing
+	heardWarmth := map[Vocalization]int{
+		PlayfulBark: -1, // too loud, too sudden
+		AlertBark:   0,  // something out there, not me
+		Whine:       0,  // not sure about me
+		LowGrowl:    -1, // maybe not this one
+		Howl:        -1, // a lot, all at once
+		Silence:     1,  // calm, watching me
+	}
+	if len(heardWarmth) != len(vocalizations) {
+		t.Fatalf("every signal needs a reading, have %d of %d", len(heardWarmth), len(vocalizations))
+	}
+	for _, a := range visitor.Archetypes {
+		for _, v := range vocalizations {
+			r := visitor.Meet(a, visitor.Signal(v))
+			warm := r.Band == visitor.BandWarming || r.Band == visitor.BandClose
+			if warm && heardWarmth[v] < 0 {
+				t.Errorf("%s: the narrator says %q was heard as %q, then the body says %q",
+					a.ID, v, Narrate(v).Heard, r.Body)
+			}
+		}
 	}
 }

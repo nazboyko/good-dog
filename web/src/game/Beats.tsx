@@ -51,8 +51,11 @@ export function Visitor({
   // out and the narrator fades in over it, nothing above them moves
   return (
     <section className="beat">
-      <p className="beat-line">A pair of shoes stops in front of your kennel.</p>
-      <p className="beat-line">A hand rests on the gate. She is looking at you.</p>
+      {visitor.arrival.map((line, i) => (
+        <p key={i} className="beat-line">
+          {line}
+        </p>
+      ))}
       <div className="visitor-slot">
         <div
           className={`panel fade-quick ${answered ? "" : "is-shown"}`}
@@ -61,7 +64,7 @@ export function Visitor({
           aria-hidden={answered}
         >
           {visitor.options.map((v) => (
-            <button key={v} onClick={() => onSignal(v)} disabled={busy} tabIndex={answered ? -1 : 0}>
+            <button key={v} onClick={() => onSignal(v)} disabled={busy || answered} tabIndex={answered ? -1 : 0}>
               {VOCALIZATION_LABELS[v]}
             </button>
           ))}
@@ -69,9 +72,18 @@ export function Visitor({
         <div className={`narrator fade ${answered ? "is-shown" : ""}`} aria-live="polite" aria-hidden={!answered}>
           {visitor.mismatch && (
             <>
-              <p className="narrator-meant">you meant: {visitor.mismatch.meant}</p>
-              <p className="narrator-heard">she heard: {visitor.mismatch.heard}</p>
-              <p className="beat-line">She stays a moment longer. Then the shoes move on.</p>
+              <div className="narrator-lines">
+                <p className="narrator-meant">you meant: {visitor.mismatch.meant}</p>
+                <p className="narrator-heard">
+                  {visitor.heard_label}: {visitor.mismatch.heard}
+                </p>
+              </div>
+              {visitor.body && <p className="beat-line">{visitor.body}</p>}
+              {visitor.parting && (
+                <p className="beat-line" style={{ animationDelay: "0.8s" }}>
+                  {visitor.parting}
+                </p>
+              )}
               <button onClick={onNext} disabled={busy}>
                 the day goes on
               </button>

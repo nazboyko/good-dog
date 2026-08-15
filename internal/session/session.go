@@ -17,6 +17,7 @@ import (
 
 	"github.com/nazboyko/good-dog/internal/animal"
 	"github.com/nazboyko/good-dog/internal/dogsheet"
+	"github.com/nazboyko/good-dog/internal/visitor"
 )
 
 // Session is one life. It holds the real dog and the sheet, but never
@@ -60,10 +61,18 @@ type ScentView struct {
 }
 
 type VisitorView struct {
+	// how this visitor arrived, two short lines
+	Arrival []string       `json:"arrival"`
 	Options []Vocalization `json:"options"`
+	// the visitor's own pronoun for the narrator label, never a guess
+	HeardLabel string `json:"heard_label"`
 	// set once the player has signaled
 	Signal   Vocalization `json:"signal,omitempty"`
 	Mismatch *Mismatch    `json:"mismatch,omitempty"`
+	// what the visitor's body says back, the only reading of comfort
+	// the player ever gets, and how the visit ended
+	Body    string `json:"body,omitempty"`
+	Parting string `json:"parting,omitempty"`
 }
 
 type NightView struct {
@@ -193,11 +202,19 @@ func (s *Session) View(now time.Time) View {
 	case BeatScent:
 		v.Scent = &ScentView{Movement: s.beforeReveal(s.sheet.Movement.Value, "")}
 	case BeatVisitor:
-		vv := &VisitorView{Options: vocalizations}
+		who := st.VisitorAtGate()
+		vv := &VisitorView{
+			Arrival:    who.Arrival,
+			Options:    vocalizations,
+			HeardLabel: who.Pronoun.Subject + " heard",
+		}
 		if signal != "" {
 			m := Narrate(signal)
+			r := visitor.Meet(who, visitor.Signal(signal))
 			vv.Signal = signal
 			vv.Mismatch = &m
+			vv.Body = r.Body
+			vv.Parting = r.Parting
 		}
 		v.Visitor = vv
 	case BeatNight:

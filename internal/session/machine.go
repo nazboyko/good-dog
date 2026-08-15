@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/nazboyko/good-dog/internal/visitor"
 )
 
 // The state machine is the single source of truth for one run: which
@@ -24,11 +26,13 @@ const (
 )
 
 // Encounter is one visitor scene's outcome, appended to the bond
-// history. Comfort is invisible as a number in the game, so this keeps
-// only what the player did. What the visitor made of it is derived.
+// history. Comfort is never stored as a number, only who came, what the
+// player answered, and what the visit left behind.
 type Encounter struct {
-	Day    int          `json:"day"`
-	Signal Vocalization `json:"signal"`
+	Day       int             `json:"day"`
+	Signal    Vocalization    `json:"signal"`
+	Archetype string          `json:"archetype"`
+	Outcome   visitor.Outcome `json:"outcome"`
 }
 
 // State is everything the game knows about one run. It round trips
@@ -43,7 +47,10 @@ type State struct {
 	StartedAt time.Time    `json:"started_at"`
 }
 
-const stateVersion = 1
+// bumped when the shape of State changes: version 2 added who came and
+// how it ended to each encounter, and a row without them would carry
+// blanks into the bond history forever
+const stateVersion = 2
 
 // Input is what the player can do. Advance moves on, Vocalize answers a
 // visitor. The server decides what either means.
@@ -113,7 +120,10 @@ func advance(r Rails, s State) (State, error) {
 	next := s
 	// leaving a visitor beat writes the encounter into the bond history
 	if s.Beat == BeatVisitor {
-		next.Bond = append(append([]Encounter{}, s.Bond...), Encounter{Day: s.Day, Signal: s.Signal})
+		a := s.VisitorAtGate()
+		r := visitor.Meet(a, visitor.Signal(s.Signal))
+		next.Bond = append(append([]Encounter{}, s.Bond...),
+			Encounter{Day: s.Day, Signal: s.Signal, Archetype: a.ID, Outcome: r.Outcome})
 		next.Signal = ""
 	}
 	if s.Beat == BeatEpilogue {
@@ -153,12 +163,7 @@ func beatIndex(r Rails, s State) int {
 		}
 		return -1
 	}
-	seenToday := 0
-	for _, e := range s.Bond {
-		if e.Day == s.Day {
-			seenToday++
-		}
-	}
+	seenToday := s.visitorsToday()
 	// the current visitor is the (seenToday+1)th visitor beat of the day
 	nth := 0
 	for i, rb := range r.Beats {
@@ -170,6 +175,24 @@ func beatIndex(r Rails, s State) int {
 		}
 	}
 	return -1
+}
+
+// visitorsToday is how many visitors this day has already met, which
+// is also which visitor is at the gate right now.
+func (s State) visitorsToday() int {
+	n := 0
+	for _, e := range s.Bond {
+		if e.Day == s.Day {
+			n++
+		}
+	}
+	return n
+}
+
+// VisitorAtGate is who is standing there, derived from where the run
+// is, so a resume always finds the same person.
+func (s State) VisitorAtGate() visitor.Archetype {
+	return visitor.ArchetypeFor(s.Day, s.visitorsToday())
 }
 
 // decideEnding is a placeholder rule until the adoption day scene and

@@ -55,7 +55,15 @@ export interface View {
   age_group: string;
   breed: string;
   scent?: { movement: string };
-  visitor?: { options: Vocalization[]; signal?: Vocalization; mismatch?: Mismatch };
+  visitor?: {
+    arrival: string[];
+    options: Vocalization[];
+    heard_label: string;
+    signal?: Vocalization;
+    mismatch?: Mismatch;
+    body?: string;
+    parting?: string;
+  };
   night?: { story: string[] };
   epilogue?: EpilogueView;
 }

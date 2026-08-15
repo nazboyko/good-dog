@@ -21,14 +21,16 @@ type Sessions struct {
 	provider animal.Provider
 	compiler *dogsheet.Compiler
 	store    *session.Store
+	// rails is which run new sessions start on, short for the playtest
+	rails session.Rails
 	// firstDog pins the playtest dog, empty means random from the pool
 	firstDog string
 	now      func() time.Time
 }
 
 // NewSessions wires the store over the DB. A nil db is memory only.
-func NewSessions(provider animal.Provider, compiler *dogsheet.Compiler, db *session.DB, firstDog string) *Sessions {
-	h := &Sessions{provider: provider, compiler: compiler, firstDog: firstDog, now: time.Now}
+func NewSessions(provider animal.Provider, compiler *dogsheet.Compiler, db *session.DB, rails session.Rails, firstDog string) *Sessions {
+	h := &Sessions{provider: provider, compiler: compiler, rails: rails, firstDog: firstDog, now: time.Now}
 	h.store = session.NewStore(db, h.rebuild)
 	return h
 }
@@ -89,7 +91,7 @@ func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not wake up right now", http.StatusServiceUnavailable)
 		return
 	}
-	s := session.New(dog, *org, sheet, session.ShortRun, h.now())
+	s := session.New(dog, *org, sheet, h.rails, h.now())
 	if err := h.store.Put(ctx, s, h.now()); err != nil {
 		log.Printf("session start: save %s: %v", s.ID, err)
 	}

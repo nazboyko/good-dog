@@ -71,8 +71,13 @@ func main() {
 	} else if n > 0 {
 		log.Printf("purged %d stale sessions", n)
 	}
+	// short rails are the playtest, RUN_RAILS=full walks the three days
+	rails := session.ShortRun
+	if os.Getenv("RUN_RAILS") == "full" {
+		rails = session.FullRun
+	}
 	// Venus first for the playtest, unset FIRST_DOG for the pool
-	sessions := httpapi.NewSessions(provider, compiler, sessionDB, os.Getenv("FIRST_DOG"))
+	sessions := httpapi.NewSessions(provider, compiler, sessionDB, rails, os.Getenv("FIRST_DOG"))
 
 	mux := http.NewServeMux()
 	sessions.Register(mux)

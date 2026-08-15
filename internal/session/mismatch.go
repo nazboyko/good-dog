@@ -15,7 +15,7 @@ type Mismatch struct {
 // and a guess would misgender a real animal.
 var mismatches = map[Vocalization]Mismatch{
 	PlayfulBark: {Meant: "come play", Heard: "too loud, too sudden"},
-	AlertBark:   {Meant: "look, someone new", Heard: "is something wrong"},
+	AlertBark:   {Meant: "look, someone new", Heard: "something out there, not me"},
 	Whine:       {Meant: "please stay a little longer", Heard: "not sure about me"},
 	LowGrowl:    {Meant: "not yet, give me a moment", Heard: "maybe not this one"},
 	Howl:        {Meant: "I am here, I am here", Heard: "a lot, all at once"},

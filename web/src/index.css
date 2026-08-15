@@ -246,6 +246,10 @@ html, body { overflow-x: hidden; }
 .fade-quick { opacity: 0; transition: opacity var(--fade-quick) ease; }
 .fade.is-shown, .fade-quick.is-shown { opacity: 1; }
 
+/* a faded out layer is still in the dom holding its space, so it must
+   never catch a click meant for what replaced it */
+.fade:not(.is-shown), .fade-quick:not(.is-shown) { pointer-events: none; }
+
 @keyframes settle {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
@@ -275,7 +279,7 @@ html, body { overflow-x: hidden; }
 .visitor-slot {
   position: relative;
   margin-top: 8px;
-  min-height: 210px;
+  min-height: 250px;
 }
 
 .visitor-slot .panel { position: absolute; inset: 0 0 auto 0; }
@@ -283,8 +287,14 @@ html, body { overflow-x: hidden; }
 .narrator {
   position: absolute;
   inset: 0 0 auto 0;
+}
+
+/* the rail marks the narrator's two lines only. what the visitor's body
+   does is consequence, not commentary, so it sits outside the quote */
+.narrator-lines {
   padding-left: 14px;
   border-left: 2px solid var(--line);
+  margin-bottom: 14px;
 }
 
 .narrator-meant, .narrator-heard {
@@ -458,7 +468,7 @@ html, body { overflow-x: hidden; }
 @media (max-width: 480px) {
   .run { padding-top: 16px; padding-bottom: 16px; }
   .panel { grid-template-columns: repeat(2, 1fr); }
-  .visitor-slot { min-height: 250px; }
+  .visitor-slot { min-height: 310px; }
   .reveal-photo { max-height: 42vh; max-height: 42dvh; }
   .about-facts { grid-template-columns: 1fr; gap: 2px 0; }
   .about-facts dt { padding-top: 8px; }
@@ -467,6 +477,8 @@ html, body { overflow-x: hidden; }
 /* ---- reduced motion: instant, but every reserved space stays ---- */
 
 @media (prefers-reduced-motion: reduce) {
-  .beat-line, .radio p { animation-duration: 1ms; }
+  /* important because the stagger delays are inline styles, and a
+     reduced motion player must never wait on an empty slot */
+  .beat-line, .radio p { animation-duration: 1ms !important; animation-delay: 0ms !important; }
   .fade, .fade-quick, .reveal-photo, .run-screen, .run button, .run .btn { transition: none; }
 }

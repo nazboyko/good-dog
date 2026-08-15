@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/nazboyko/good-dog/internal/visitor"
 )
 
 var adv = Input{Kind: InputAdvance}
@@ -156,7 +158,7 @@ func TestUnmarshalRefusesUnknownVersion(t *testing.T) {
 		t.Error("bad json must fail")
 	}
 	// a state saved with no bond array resumes with an empty one, not nil
-	s, err := UnmarshalState([]byte(`{"version":1,"day":1,"beat":"wake","started_at":"2026-08-15T09:00:00Z"}`))
+	s, err := UnmarshalState([]byte(`{"version":2,"day":1,"beat":"wake","started_at":"2026-08-15T09:00:00Z"}`))
 	if err != nil || s.Bond == nil {
 		t.Errorf("bond must never resume as nil: %v %+v", err, s)
 	}
@@ -229,12 +231,47 @@ func TestAdvanceRefusesAStateTheseRailsDoNotKnow(t *testing.T) {
 
 func TestUnmarshalRefusesUnknownBeatOrZeroDay(t *testing.T) {
 	for _, raw := range []string{
-		`{"version":1,"day":1,"beat":"brunch","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
-		`{"version":1,"day":0,"beat":"wake","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
-		`{"version":1,"day":1,"beat":"","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
+		`{"version":2,"day":1,"beat":"brunch","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
+		`{"version":2,"day":0,"beat":"wake","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
+		`{"version":2,"day":1,"beat":"","bond":[],"started_at":"2026-08-15T09:00:00Z"}`,
 	} {
 		if _, err := UnmarshalState([]byte(raw)); err == nil {
 			t.Errorf("must refuse: %s", raw)
+		}
+	}
+}
+
+// A three day run meets both kinds of visitor, and the one who could
+// never take this dog home still leaves a real result behind.
+func TestFullRunMeetsBothVisitorsAndRecordsHonestOutcomes(t *testing.T) {
+	s := NewState(FullRun, t0)
+	for guard := 0; guard < 100 && s.Beat != BeatDone; guard++ {
+		if s.Beat == BeatVisitor {
+			// silence, which both archetypes read as calm
+			s = run(t, FullRun, s, say(Silence))
+		}
+		s = run(t, FullRun, s, adv)
+	}
+	met := map[string]visitor.Outcome{}
+	for _, e := range s.Bond {
+		if e.Archetype == "" || e.Outcome == "" {
+			t.Fatalf("every encounter must name who came and how it ended: %+v", e)
+		}
+		met[e.Archetype] = e.Outcome
+	}
+	if len(met) != len(visitor.Archetypes) {
+		t.Errorf("a three day run must meet every archetype, met %v", met)
+	}
+	if met[visitor.QuietSeeker.ID] != visitor.OutcomeAsked {
+		t.Errorf("silence should reach the visitor who is looking, got %q", met[visitor.QuietSeeker.ID])
+	}
+	if got := met[visitor.HereForAnother.ID]; got != visitor.OutcomeParted {
+		t.Errorf("the visitor who came for another dog should part well, got %q", got)
+	}
+	// nothing the player did is recorded as a failure
+	for _, e := range s.Bond {
+		if e.Outcome == "failed" || e.Outcome == "lost" {
+			t.Errorf("outcome vocabulary must never blame: %+v", e)
 		}
 	}
 }
