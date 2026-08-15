@@ -52,6 +52,22 @@ Re-measure whenever the copy changes, in both directions. Rewriting the close sh
 
 Where a screen stages its lines, the button that carries the player forward waits for the last one and is disabled until it arrives. A button rendered at delay zero next to lines at 800ms and 1400ms is live before the player has read them, so a fast hand skips the ending. Fading it in is not enough on its own: an element at `opacity: 0` under `animation-fill-mode: both` is still clickable, so the wait has to disable it too. Delays live next to the transition timings in `web/src/engine/run.ts` and go to zero under reduced motion, where the disable still applies.
 
+## The scene sits behind everything, and that is a paint order problem
+
+The room is a fixed, full viewport canvas at `z-index: 0` under a flat veil, mounted by `SceneBackdrop`. A fixed positioned element with `z-index: 0` paints in the positioned layer, and plain non positioned block content paints *below* that layer, so adding the scene put the whole run screen under the veil. It did not look like that, which is what made it slow to see: the lines that kept rendering were the ones running the `settle` animation, because an animating opacity gives an element its own stacking context and lifts it back above. So the body line was fine and the mismatch narrator beside it, which has no animation, silently vanished behind the veil along with its rail.
+
+The fix is that `.run` and `.run-screen` both carry `position: relative; z-index: 1`. Any new full bleed layer needs the same treatment, and the check is to look at a screen whose text is *not* animating.
+
+No test catches this. It is invisible to the DOM: the element is in the tree, `getComputedStyle` reports `opacity: 1`, and `document.elementFromPoint` returns it, because hit testing and painting are not the same question. Only a screenshot shows it.
+
+Ship 1 leaves one pop behind, deliberately. The scene layer is outside `.run-screen`, so it does not ride the screen's fade: when the beat moves from visitor to night the room is still there through the beat of dark and then disappears the instant the new view mounts. Fixing it means holding the previous room through the fade out, which cannot apply to the reveal, where the canvas must be gone the moment the epilogue mounts and not a frame later. That special case belongs with the per beat rooms in ship 2.
+
+## Measuring anything visual in a backgrounded pane
+
+When the browser pane is not fronted, `document.hidden` is true and screenshots come back as stale frames. A style change made from a script computes correctly in the DOM and does not appear in the next screenshot, which reads exactly like a rendering bug in the app. The tell is to set `document.body.style.background = "red"` and screenshot: if the page is not red, the frame is stale and every visual conclusion from that screenshot is worthless.
+
+A navigation forces a fresh capture, so the way to screenshot a specific state is to park the session at that beat through the API, then navigate and shoot. Layout and computed styles stay trustworthy throughout, so measurement by `getBoundingClientRect` is fine while the pane is hidden. Paint is not.
+
 ## Small screens
 
 Checked at 390 wide and 768 wide, whole run: no horizontal scroll anywhere, every tap target 44px or larger, the vocalization panel goes to two columns under 480px, the About facts stack to one column, and the photo never overflows. Safe area insets are respected on the sides.

@@ -1,7 +1,7 @@
 import { renderDogVision } from "../engine/dogvision";
 import type { SpikeStatus } from "./status";
 
-export const TEST_SCENE = encodeURI("/scenes/Inside the Enclosure (Main Location).png");
+export const TEST_SCENE = "/scenes/enclosure.webp";
 
 export async function runVisionCheck(
   canvas: HTMLCanvasElement | null,
@@ -13,7 +13,9 @@ export async function runVisionCheck(
   }
   onStatus({ state: "rendering" });
   try {
-    const mode = await renderDogVision(canvas, TEST_SCENE);
+    // the spike is where the swatch strip is the point: it is the
+    // visible evidence that the pass really ran on this machine
+    const mode = await renderDogVision(canvas, TEST_SCENE, { showSwatches: true });
     onStatus({
       state: mode === "webgl" ? "rendered with webgl, swatches pass" : `rendered with ${mode}`,
       ok: true,

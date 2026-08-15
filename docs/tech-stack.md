@@ -34,6 +34,10 @@
 | Gemini free tier plus a burst of calls | 429 quota per minute | one shared client, 8 rpm queue, backoff honoring retryDelay, flash pinned |
 | Model lines retire for new projects | pinned model 429s with quota limit 0 while the key is fine | startup preflight lists models and warns, repin by hand |
 | overflow-x hidden on the flex shell | overflow-y forced to auto, the shell becomes its own scroll box, scrollable views paint black past the fold | clip horizontal overflow on html and body only, never on the shell, and never add position sticky under a body with overflow set |
+| A fixed full bleed layer at z-index 0 plus plain block content | the layer paints over the text, and only elements with a running animation stay visible, so a screen loses half its lines and keeps the other half | give the content its own stacking context, position relative plus z-index 1, and check a screen whose text is not animating |
+| img.decode() plus a backgrounded tab | the promise never settles and never rejects, so anything awaiting it hangs forever and the scene simply never arrives | decode with createImageBitmap, which does not depend on the document being visible |
+| ImageBitmap plus UNPACK_FLIP_Y_WEBGL | the flag is silently ignored for a bitmap source, so switching a loader from an img element to createImageBitmap turns the whole scene upside down | set imageOrientation when the bitmap is created, and note the 2D path wants the opposite of what webgl wants |
+| Screenshots plus a pane that is not fronted | frames come back stale, so a DOM change reads as correct and the picture disagrees | check document.hidden, probe with a red body background, and force a fresh capture by navigating |
 
 ## Steel thread spike, Friday, about one hour, before real work
 1. Go serves SSE through the Vite proxy and an event shows in the browser

@@ -10,6 +10,7 @@ import {
   transitionTimes,
   vocalize,
 } from "../engine/run";
+import { SceneBackdrop } from "./Scene";
 import { Night, Scent, Visitor, Wake } from "./Beats";
 import { Reveal } from "./Reveal";
 
@@ -131,6 +132,7 @@ export function Run() {
 
   return (
     <main className={`run run-${view.beat}`}>
+      <SceneBackdrop beat={view.beat} />
       <div className={phaseClass}>
         {view.beat === "wake" && <Wake view={view} onNext={next} busy={busy} />}
         {view.beat === "scent" && <Scent view={view} onNext={next} busy={busy} />}

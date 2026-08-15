@@ -21,6 +21,10 @@ const CLEAR_RGB = [255, 153, 0] as const;
 
 const watchedCanvases = new WeakSet<HTMLCanvasElement>();
 
+// what each canvas is currently showing, so a context restore repaints
+// the scene that is on it now rather than the one it opened with
+const latestRender = new WeakMap<HTMLCanvasElement, { imageUrl: string; showSwatches: boolean }>();
+
 const VERT = `
 attribute vec2 aPos;
 varying vec2 vUv;
@@ -53,8 +57,15 @@ export type VisionMode = "webgl" | "2d fallback";
 export async function renderDogVision(
   canvas: HTMLCanvasElement,
   imageUrl: string,
+  { showSwatches = false }: { showSwatches?: boolean } = {},
 ): Promise<VisionMode> {
-  const image = await loadImage(imageUrl);
+  // The context decides which way up the picture has to be decoded, so
+  // it is asked for before the image is fetched. WebGL reads textures
+  // from the bottom left, and UNPACK_FLIP_Y_WEBGL, which used to correct
+  // for that, is ignored when the source is an ImageBitmap. Orientation
+  // for a bitmap is fixed when it is created and nowhere else.
+  const gl = canvas.getContext("webgl");
+  const { image, truth } = await loadImage(imageUrl, { flipY: gl !== null });
 
   const cssWidth = canvas.clientWidth;
   if (cssWidth === 0) {
@@ -64,14 +75,23 @@ export async function renderDogVision(
   canvas.width = Math.round(cssWidth * dpr);
   canvas.height = Math.round(((cssWidth * image.height) / image.width) * dpr);
 
-  const gl = canvas.getContext("webgl");
-  if (!gl) return render2dFallback(canvas, image);
+  if (!gl) {
+    try {
+      return render2dFallback(canvas, image);
+    } finally {
+      image.close();
+    }
+  }
 
+  // the handler must repaint whatever is on this canvas now, not
+  // whatever was on it the first time the listener was attached
+  latestRender.set(canvas, { imageUrl, showSwatches });
   if (!watchedCanvases.has(canvas)) {
     watchedCanvases.add(canvas);
     canvas.addEventListener("webglcontextlost", (e) => e.preventDefault());
     canvas.addEventListener("webglcontextrestored", () => {
-      renderDogVision(canvas, imageUrl).catch(() => {});
+      const latest = latestRender.get(canvas);
+      if (latest) renderDogVision(canvas, latest.imageUrl, { showSwatches: latest.showSwatches }).catch(() => {});
     });
   }
 
@@ -82,6 +102,8 @@ export async function renderDogVision(
   gl.clear(gl.COLOR_BUFFER_BIT);
   uploadTexture(gl, image);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  assertUpright(gl, truth);
 
   // known swatches through the same pass, small strip in the corner
   const swatch = Math.max(8, Math.round(12 * dpr));
@@ -124,7 +146,66 @@ export async function renderDogVision(
       throw new Error(`dog vision must never lean green, got ${rgb(p)}`);
     }
   }
+
+  // The swatches are a measuring instrument, not scenery. They are read
+  // off the real GPU output above and then painted over, so the frame a
+  // player sees is the scene alone. The spike page keeps them on screen
+  // because there the strip is the evidence.
+  if (!showSwatches) {
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    uploadTexture(gl, image);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    // this repaint is the frame the player actually sees, and until now
+    // it was the one frame nothing looked at: a failure here left the
+    // measuring strip sitting in the corner of the game
+    const corner = readPixel(gl, Math.floor(swatch / 2), Math.floor(swatch / 2));
+    if (redBecameMuddyYellow(corner)) {
+      throw new Error(`the swatch strip survived the repaint, got ${rgb(corner)}`);
+    }
+  }
+  image.close();
   return "webgl";
+}
+
+// The scene is on the buffer and nothing else is yet. Is it the right
+// way up?
+//
+// Every other check here is blind to orientation, which is how an
+// upside down room shipped once: the swatch strip is three texels in a
+// row, so flipping it vertically does nothing, and the scene check
+// reads the center pixel, which is the one pixel a vertical flip leaves
+// alone. This compares the top and bottom of what was drawn against the
+// top and bottom of the source, and a whole row averaged is far apart
+// on any real photograph even when single pixels are not.
+function assertUpright(gl: WebGLRenderingContext, truth: Edges | null) {
+  if (!truth) return;
+  const wantTop = dogVisionReference(truth.top);
+  const wantBottom = dogVisionReference(truth.bottom);
+  // gl y counts from the bottom of the buffer
+  const gotTop = averageRow(gl, Math.round(gl.drawingBufferHeight * 0.94));
+  const gotBottom = averageRow(gl, Math.round(gl.drawingBufferHeight * 0.06));
+  const upright = apart(wantTop, gotTop) + apart(wantBottom, gotBottom);
+  const flipped = apart(wantBottom, gotTop) + apart(wantTop, gotBottom);
+  if (flipped < upright) {
+    throw new Error(
+      `the scene rendered upside down: top of frame ${rgb(gotTop)} matches the bottom of the picture`,
+    );
+  }
+}
+
+function averageRow(gl: WebGLRenderingContext, y: number): number[] {
+  const px = new Uint8Array(4);
+  const sum = [0, 0, 0];
+  const n = 32;
+  for (let i = 0; i < n; i++) {
+    gl.readPixels(Math.round(((i + 0.5) / n) * gl.drawingBufferWidth), y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    for (let c = 0; c < 3; c++) sum[c] += px[c];
+  }
+  return sum.map((v) => v / n);
+}
+
+function apart(a: readonly number[], b: readonly number[]): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
 // Reference pipeline in plain TS, byte in byte out, mirrors the shader
@@ -201,7 +282,7 @@ function setupPass(gl: WebGLRenderingContext) {
 
 // NPOT sources: clamp both axes, no mipmaps. The scene filters linear,
 // the swatch strip filters nearest so cells stay flat for readback.
-function uploadTexture(gl: WebGLRenderingContext, source: HTMLImageElement | Uint8Array) {
+function uploadTexture(gl: WebGLRenderingContext, source: Decoded | Uint8Array) {
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
   const filter = source instanceof Uint8Array ? gl.NEAREST : gl.LINEAR;
@@ -230,8 +311,23 @@ function rgb(p: ArrayLike<number>): string {
   return `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
 }
 
-function render2dFallback(canvas: HTMLCanvasElement, image: HTMLImageElement): VisionMode {
-  const ctx = canvas.getContext("2d")!;
+// The 2D path is an approximation of dog vision, not the real matrix,
+// and it has to be held to the same promise: no true color before the
+// epilogue. Canvas filter is silently ignored where it is unsupported,
+// which used to mean nothing because this only ran on the spike page.
+// Now it runs behind three beats of the game, and an ignored filter
+// would put the shelter on screen in full human color, which is the one
+// thing the whole scene boundary exists to prevent. So it is refused
+// rather than drawn wrong: a dark room is a loss, a true color one is a
+// broken promise.
+function render2dFallback(canvas: HTMLCanvasElement, image: Decoded): VisionMode {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("no webgl and no 2d context, nothing can draw this scene");
+  }
+  if (!("filter" in ctx)) {
+    throw new Error("2d fallback cannot desaturate here, refusing to draw the room in human color");
+  }
   ctx.filter = "saturate(0.55) sepia(0.2)";
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
   const center = ctx.getImageData(
@@ -243,17 +339,71 @@ function render2dFallback(canvas: HTMLCanvasElement, image: HTMLImageElement): V
   if (center[3] === 0) {
     throw new Error("2d fallback drew nothing, center pixel is still transparent");
   }
+  // the filter can also be assigned and ignored, so check the result
+  if (isGreenDominant(center)) {
+    throw new Error(`2d fallback left the room leaning green, got ${rgb(center)}`);
+  }
   return "2d fallback";
 }
 
 // decode() rejects broken images up front and avoids a sync decode stall
-async function loadImage(url: string): Promise<HTMLImageElement> {
-  const img = new Image();
-  img.src = url;
+type Decoded = ImageBitmap;
+
+// Decoding must not depend on the tab being on screen. An <img> element
+// decodes lazily, and img.decode() on a backgrounded document can sit
+// unsettled for as long as the tab stays hidden: no error, no rejection,
+// just a promise nobody hears from again and a room that never arrives.
+// createImageBitmap decodes off the element and does not care. Measured
+// in a hidden tab: fetch plus createImageBitmap about 15ms, img.decode()
+// still unsettled after 3 seconds.
+//
+// flipY is not a preference, it is which consumer is asking. WebGL wants
+// the rows the other way up and cannot flip a bitmap at upload time;
+// the 2D fallback draws it as it comes.
+async function loadImage(url: string, { flipY }: { flipY: boolean }): Promise<Loaded> {
   try {
-    await img.decode();
-  } catch {
-    throw new Error(`image failed to load or decode: ${url}`);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`http ${res.status}`);
+    const blob = await res.blob();
+    const image = await createImageBitmap(blob, {
+      imageOrientation: flipY ? "flipY" : "from-image",
+    });
+    return { image, truth: await sourceEdges(blob) };
+  } catch (e) {
+    throw new Error(`image failed to load or decode: ${url}, ${e}`);
   }
-  return img;
+}
+
+type Loaded = { image: Decoded; truth: Edges | null };
+type Edges = { top: number[]; bottom: number[] };
+
+// The top and bottom rows of the picture as it is stored, decoded a
+// second time and explicitly upright.
+//
+// It has to be a separate decode. Measuring the same bitmap the renderer
+// is about to use tells you nothing: if that bitmap is upside down then
+// so is the measurement, both sides move together and the comparison
+// always agrees with itself. That mistake was made here once already.
+// Decoding straight to 32x2 keeps it cheap.
+async function sourceEdges(blob: Blob): Promise<Edges | null> {
+  const probe = document.createElement("canvas");
+  probe.width = 32;
+  probe.height = 2;
+  const ctx = probe.getContext("2d");
+  if (!ctx) return null;
+  const small = await createImageBitmap(blob, {
+    imageOrientation: "from-image",
+    resizeWidth: 32,
+    resizeHeight: 2,
+    resizeQuality: "low",
+  });
+  ctx.drawImage(small, 0, 0);
+  small.close();
+  const read = (y: number) => {
+    const d = ctx.getImageData(0, y, 32, 1).data;
+    const sum = [0, 0, 0];
+    for (let i = 0; i < 32; i++) for (let c = 0; c < 3; c++) sum[c] += d[i * 4 + c];
+    return sum.map((v) => v / 32);
+  };
+  return { top: read(0), bottom: read(1) };
 }
