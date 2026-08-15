@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -345,26 +346,74 @@ func pronounsFor(sex string) pronounSet {
 	return pronounSet{"They", "Their", "are", "have"}
 }
 
-// Store keeps live sessions in memory. The prototype does not survive a
-// restart yet, that is the sqlite step on the plan.
+// Store is the in memory cache over the durable DB. Every Put snapshots
+// to the DB, every Get miss falls through to the DB and rebuilds the
+// session, so a restart loses nothing.
 type Store struct {
 	mu       sync.Mutex
 	sessions map[string]*Session
+	db       *DB
+	// rebuild turns a persisted row back into a live session: the dog,
+	// the org and the sheet come from the provider and the sheet cache
+	rebuild func(ctx context.Context, row Row) (*Session, error)
 }
 
-func NewStore() *Store {
-	return &Store{sessions: map[string]*Session{}}
+// NewStore takes the DB and a rebuild func. A nil DB is a memory only
+// store, which the tests and a scratch server use.
+func NewStore(db *DB, rebuild func(ctx context.Context, row Row) (*Session, error)) *Store {
+	return &Store{sessions: map[string]*Session{}, db: db, rebuild: rebuild}
 }
 
-func (st *Store) Put(s *Session) {
+// Put caches the session and snapshots it. Called on create and after
+// every transition, so the DB always holds the latest truth.
+func (st *Store) Put(ctx context.Context, s *Session, now time.Time) error {
 	st.mu.Lock()
-	defer st.mu.Unlock()
 	st.sessions[s.ID] = s
+	st.mu.Unlock()
+	if st.db == nil {
+		return nil
+	}
+	return st.db.Save(ctx, Row{
+		ID: s.ID, DogID: s.dog.ID, OrgID: s.org.ID, Rails: s.rails.Name(),
+		State: s.State(), UpdatedAt: now,
+	})
 }
 
-func (st *Store) Get(id string) (*Session, bool) {
+// Get returns the cached session, or rebuilds it from the DB. A miss
+// anywhere is ErrNotFound, and the caller starts a clean run.
+func (st *Store) Get(ctx context.Context, id string) (*Session, error) {
 	st.mu.Lock()
-	defer st.mu.Unlock()
 	s, ok := st.sessions[id]
-	return s, ok
+	st.mu.Unlock()
+	if ok {
+		return s, nil
+	}
+	if st.db == nil || st.rebuild == nil {
+		return nil, ErrNotFound
+	}
+	row, err := st.db.Load(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s, err = st.rebuild(ctx, row)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	st.mu.Lock()
+	// another request may have rebuilt it first, keep the first one
+	if cached, ok := st.sessions[id]; ok {
+		s = cached
+	} else {
+		st.sessions[id] = s
+	}
+	st.mu.Unlock()
+	return s, nil
+}
+
+// forget drops a session from the cache only, so a test can simulate
+// a restart without closing the DB.
+func (st *Store) forget(id string) {
+	st.mu.Lock()
+	delete(st.sessions, id)
+	st.mu.Unlock()
 }

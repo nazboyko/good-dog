@@ -47,7 +47,16 @@ func (failingLLM) GenerateJSON(context.Context, string, gemini.Options) ([]byte,
 	return nil, &gemini.APIError{Status: 503, Detail: "test"}
 }
 
-func newTestServer(t *testing.T) (*httptest.Server, string) {
+// testWorld is everything a test needs to stand a server up, and to
+// stand a second one up over the same database to simulate a restart.
+type testWorld struct {
+	provider stubProvider
+	compiler *dogsheet.Compiler
+	dbPath   string
+	photo    string
+}
+
+func newTestWorld(t *testing.T) testWorld {
 	t.Helper()
 	dir := t.TempDir()
 	photo := filepath.Join(dir, "venus.png")
@@ -69,12 +78,29 @@ func newTestServer(t *testing.T) (*httptest.Server, string) {
 	}
 	org := animal.Organization{ID: "org", Name: "Ruff Start Rescue", City: "Princeton", State: "MN"}
 	compiler := dogsheet.NewCompiler(failingLLM{}, dogsheet.NewCache(filepath.Join(dir, "sheets")))
-	h := NewSessions(stubProvider{dog: dog, org: org}, compiler, "rsmn-a-9548")
+	return testWorld{provider: stubProvider{dog: dog, org: org}, compiler: compiler, dbPath: filepath.Join(dir, "sessions.db"), photo: photo}
+}
+
+// boot stands a server up over the world's database, like a process start.
+func (w testWorld) boot(t *testing.T) *httptest.Server {
+	t.Helper()
+	db, err := session.OpenDB(w.dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	h := NewSessions(w.provider, w.compiler, db, "rsmn-a-9548")
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv, photo
+	return srv
+}
+
+func newTestServer(t *testing.T) (*httptest.Server, string) {
+	t.Helper()
+	w := newTestWorld(t)
+	return w.boot(t), w.photo
 }
 
 func post(t *testing.T, url, body string) (*http.Response, session.View) {
@@ -166,7 +192,7 @@ func TestPinnedDogMustBeRealAndActive(t *testing.T) {
 	dir := t.TempDir()
 	fake := animal.Animal{ID: "example-1", Name: "Biscuit", Synthetic: true, Status: animal.StatusActive}
 	compiler := dogsheet.NewCompiler(nil, dogsheet.NewCache(filepath.Join(dir, "sheets")))
-	h := NewSessions(stubProvider{dog: fake, org: animal.Organization{ID: "org"}}, compiler, "example-1")
+	h := NewSessions(stubProvider{dog: fake, org: animal.Organization{ID: "org"}}, compiler, nil, "example-1")
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := httptest.NewServer(mux)
@@ -183,5 +209,73 @@ func TestSessionSurvivesDefaultSheet(t *testing.T) {
 	_, v := post(t, srv.URL+"/api/session", "")
 	if v.SessionID == "" {
 		t.Fatal("a session must start even when the model is down")
+	}
+}
+
+func TestSessionResumesAcrossAServerRestart(t *testing.T) {
+	w := newTestWorld(t)
+	first := w.boot(t)
+
+	// play to the visitor and answer, every step snapshots to the db
+	_, v := post(t, first.URL+"/api/session", "")
+	base := "/api/session/" + v.SessionID
+	post(t, first.URL+base+"/advance", "")
+	post(t, first.URL+base+"/advance", "")
+	_, before := post(t, first.URL+base+"/vocalize", `{"signal":"whine"}`)
+	first.Close()
+
+	// a new process over the same database, the cache is empty
+	second := w.boot(t)
+	res, err := http.Get(second.URL + base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("resume after restart must find the life, got %d", res.StatusCode)
+	}
+	var after session.View
+	json.NewDecoder(res.Body).Decode(&after)
+	res.Body.Close()
+	if after.Beat != session.BeatVisitor || after.Visitor == nil || after.Visitor.Signal != "whine" {
+		t.Fatalf("resumed at the wrong place: %+v", after)
+	}
+	if after.Visitor.Mismatch == nil || after.Visitor.Mismatch.Heard != before.Visitor.Mismatch.Heard {
+		t.Errorf("the narrator must read the same after restart")
+	}
+	// and it keeps playing from exactly there
+	_, next := post(t, second.URL+base+"/advance", "")
+	if next.Beat != session.BeatNight {
+		t.Errorf("after restart and advance: %s", next.Beat)
+	}
+}
+
+func TestSessionUnknownOrExpiredIDIsACleanMiss(t *testing.T) {
+	w := newTestWorld(t)
+	srv := w.boot(t)
+	// unknown id: 404 with the stable body, never a 500
+	res, _ := http.Get(srv.URL + "/api/session/never-existed")
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown id must be 404, got %d", res.StatusCode)
+	}
+	// an expired session: written, purged, then asked for
+	_, v := post(t, srv.URL+"/api/session", "")
+	db, err := session.OpenDB(w.dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Purge(context.Background(), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	// still cached in this process, so it resumes; a restart makes it a miss
+	srv.Close()
+	again := w.boot(t)
+	res, _ = http.Get(again.URL + "/api/session/" + v.SessionID)
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("an expired session after restart must be a clean 404, got %d", res.StatusCode)
+	}
+	// and a fresh start still works, the player gets a new life
+	if r, nv := post(t, again.URL+"/api/session", ""); r.StatusCode != http.StatusCreated || nv.Beat != session.BeatWake {
+		t.Errorf("a clean new run must start after a miss: %d %+v", r.StatusCode, nv)
 	}
 }

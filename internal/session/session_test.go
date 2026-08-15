@@ -1,7 +1,9 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -259,16 +261,78 @@ func TestNarrateEveryVocalizationAndFallback(t *testing.T) {
 	}
 }
 
-func TestStoreRoundTrip(t *testing.T) {
-	st := NewStore()
+func TestStoreMemoryOnly(t *testing.T) {
+	st := NewStore(nil, nil)
 	s := newTestSession()
-	st.Put(s)
-	got, ok := st.Get(s.ID)
-	if !ok || got != s {
+	if err := st.Put(context.Background(), s, t0); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.Get(context.Background(), s.ID)
+	if err != nil || got != s {
 		t.Fatal("store must return the same session")
 	}
-	if _, ok := st.Get("nope"); ok {
-		t.Fatal("unknown id must miss")
+	if _, err := st.Get(context.Background(), "nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown id must be ErrNotFound, got %v", err)
+	}
+}
+
+func TestStoreResumesFromTheDBAfterARestart(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	// the loader rebuilds a session from a row, the way the server does
+	load := func(ctx context.Context, row Row) (*Session, error) {
+		rails, ok := RailsByName(row.Rails)
+		if !ok {
+			return nil, errors.New("unknown rails")
+		}
+		return Resume(row.ID, testDog, testOrg, testSheet(), rails, row.State), nil
+	}
+	st := NewStore(db, load)
+	s := newTestSession()
+	if err := st.Put(ctx, s, t0); err != nil {
+		t.Fatal(err)
+	}
+	s.Advance()
+	s.Advance()
+	s.Vocalize(Whine)
+	if err := st.Put(ctx, s, t0.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(s.View(t0))
+
+	// simulated restart: the cache is gone, the DB is not
+	st.forget(s.ID)
+	back, err := st.Get(ctx, s.ID)
+	if err != nil {
+		t.Fatalf("resume after restart: %v", err)
+	}
+	if back == s {
+		t.Fatal("test setup: the session must have been rebuilt, not cached")
+	}
+	after, _ := json.Marshal(back.View(t0))
+	if string(before) != string(after) {
+		t.Errorf("view after restart differs:\n%s\n%s", before, after)
+	}
+	if err := back.Advance(); err != nil || back.Beat() != BeatNight {
+		t.Errorf("resumed session must keep playing: %v %s", err, back.Beat())
+	}
+	// and a second Get returns the same rebuilt instance, not another copy
+	again, _ := st.Get(ctx, s.ID)
+	if again != back {
+		t.Error("the rebuilt session must be cached")
+	}
+}
+
+func TestStoreMissWhenTheLoaderCannotRebuild(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	failing := func(ctx context.Context, row Row) (*Session, error) { return nil, errors.New("dog left the pool") }
+	st := NewStore(db, failing)
+	s := newTestSession()
+	st.Put(ctx, s, t0)
+	st.forget(s.ID)
+	if _, err := st.Get(ctx, s.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a session that cannot be rebuilt must be a clean miss, got %v", err)
 	}
 }
 

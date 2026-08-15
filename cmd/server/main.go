@@ -14,7 +14,11 @@ import (
 	"github.com/nazboyko/good-dog/internal/elevenlabs"
 	"github.com/nazboyko/good-dog/internal/gemini"
 	"github.com/nazboyko/good-dog/internal/httpapi"
+	"github.com/nazboyko/good-dog/internal/session"
 )
+
+// a life untouched this long is over, the row is purged at startup
+const sessionTTL = 48 * time.Hour
 
 func main() {
 	if err := config.LoadDotEnv(".env"); err != nil {
@@ -56,8 +60,19 @@ func main() {
 		llm = geminiClient
 	}
 	compiler := dogsheet.NewCompiler(llm, dogsheet.NewCache("cache/sheets"))
+	// sessions survive a restart: sqlite is the truth, the store caches it.
+	// A life left open for days is not resumed, the player gets a clean one.
+	sessionDB, err := session.OpenDB("cache/sessions.db")
+	if err != nil {
+		log.Fatalf("open sessions db: %v", err)
+	}
+	if n, err := sessionDB.Purge(context.Background(), time.Now().Add(-sessionTTL)); err != nil {
+		log.Printf("purge sessions: %v", err)
+	} else if n > 0 {
+		log.Printf("purged %d stale sessions", n)
+	}
 	// Venus first for the playtest, unset FIRST_DOG for the pool
-	sessions := httpapi.NewSessions(provider, compiler, os.Getenv("FIRST_DOG"))
+	sessions := httpapi.NewSessions(provider, compiler, sessionDB, os.Getenv("FIRST_DOG"))
 
 	mux := http.NewServeMux()
 	sessions.Register(mux)

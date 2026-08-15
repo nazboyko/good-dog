@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { View, Vocalization } from "../engine/run";
-import { advance, startRun, transitionTimes, vocalize } from "../engine/run";
+import {
+  advance,
+  fetchRun,
+  forgetRun,
+  rememberRun,
+  rememberedRun,
+  startRun,
+  transitionTimes,
+  vocalize,
+} from "../engine/run";
 import { Night, Scent, Visitor, Wake } from "./Beats";
 import { Reveal } from "./Reveal";
 
@@ -21,6 +30,41 @@ export function Run() {
   const [phase, setPhase] = useState<Phase>("in");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // resuming is true until we know whether a remembered life is still there
+  const [resuming, setResuming] = useState(() => rememberedRun() !== null);
+
+  // on mount, pick a remembered life back up. any miss falls through to
+  // the start screen with a clean slate, never an error
+  useEffect(() => {
+    const id = rememberedRun();
+    if (!id) return;
+    let cancelled = false;
+    fetchRun(id)
+      .then((v) => {
+        if (cancelled) return;
+        if (v && v.beat !== "done") {
+          setView(v);
+        } else {
+          // a definite miss: the life is gone, start clean
+          forgetRun();
+        }
+      })
+      .catch(() => {
+        // a transient error, a deploy window or a dropped connection:
+        // keep the id so the next reload can still resume the life
+      })
+      .finally(() => {
+        if (!cancelled) setResuming(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // every view we hold is remembered, so a refresh lands back here
+  useEffect(() => {
+    if (view) rememberRun(view.session_id);
+  }, [view]);
 
   // transition: fade out while the next view loads, hold dark, swap, fade in
   const transition = async (work: () => Promise<View>) => {
@@ -62,6 +106,10 @@ export function Run() {
   };
 
   const phaseClass = `run-screen ${phase === "in" ? "is-shown" : ""}`;
+
+  if (resuming) {
+    return <main className="run" />;
+  }
 
   if (!view) {
     return (

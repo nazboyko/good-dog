@@ -87,6 +87,43 @@ export function startRun(): Promise<View> {
   return call("POST", "/api/session");
 }
 
+// fetchRun reads a session by id. Null on any miss: unknown, expired,
+// or unreadable. The caller starts a clean run, never an error screen.
+export async function fetchRun(sessionId: string): Promise<View | null> {
+  const res = await fetch(`/api/session/${sessionId}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error((await res.text()).trim() || "something went quiet, try again");
+  return (await res.json()) as View;
+}
+
+// The session id lives in sessionStorage: a refresh resumes the same
+// life, a new tab starts a new one, and it never outlives the browser.
+const SESSION_KEY = "good-dog.session";
+
+export function rememberRun(sessionId: string): void {
+  try {
+    sessionStorage.setItem(SESSION_KEY, sessionId);
+  } catch {
+    // private mode or storage disabled: the run still plays, it just will not resume
+  }
+}
+
+export function rememberedRun(): string | null {
+  try {
+    return sessionStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function forgetRun(): void {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // nothing to forget
+  }
+}
+
 export function advance(sessionId: string): Promise<View> {
   return call("POST", `/api/session/${sessionId}/advance`);
 }

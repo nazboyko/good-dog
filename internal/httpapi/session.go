@@ -26,14 +26,39 @@ type Sessions struct {
 	now      func() time.Time
 }
 
-func NewSessions(provider animal.Provider, compiler *dogsheet.Compiler, firstDog string) *Sessions {
-	return &Sessions{
-		provider: provider,
-		compiler: compiler,
-		store:    session.NewStore(),
-		firstDog: firstDog,
-		now:      time.Now,
+// NewSessions wires the store over the DB. A nil db is memory only.
+func NewSessions(provider animal.Provider, compiler *dogsheet.Compiler, db *session.DB, firstDog string) *Sessions {
+	h := &Sessions{provider: provider, compiler: compiler, firstDog: firstDog, now: time.Now}
+	h.store = session.NewStore(db, h.rebuild)
+	return h
+}
+
+// rebuild turns a persisted row back into a live session: the dog and
+// org from the provider, the sheet through the compiler's cache. If the
+// dog has left the pool since, the row is a miss and the player gets a
+// clean new run.
+func (h *Sessions) rebuild(ctx context.Context, row session.Row) (*session.Session, error) {
+	rails, ok := session.RailsByName(row.Rails)
+	if !ok {
+		return nil, fmt.Errorf("unknown rails %q", row.Rails)
 	}
+	dog, err := h.provider.GetAnimal(ctx, row.DogID)
+	if err != nil {
+		return nil, err
+	}
+	if dog.Synthetic || dog.Status != animal.StatusActive {
+		return nil, fmt.Errorf("dog %s is no longer playable", row.DogID)
+	}
+	org, err := h.provider.GetOrganization(ctx, row.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	sheet, err := h.compiler.Compile(ctx, *dog)
+	var degraded *dogsheet.Degraded
+	if err != nil && !errors.As(err, &degraded) {
+		return nil, err
+	}
+	return session.Resume(row.ID, *dog, *org, sheet, rails, row.State), nil
 }
 
 func (h *Sessions) Register(mux *http.ServeMux) {
@@ -65,7 +90,9 @@ func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := session.New(dog, *org, sheet, session.ShortRun, h.now())
-	h.store.Put(s)
+	if err := h.store.Put(ctx, s, h.now()); err != nil {
+		log.Printf("session start: save %s: %v", s.ID, err)
+	}
 	writeJSON(w, http.StatusCreated, s.View(h.now()))
 }
 
@@ -94,12 +121,28 @@ func (h *Sessions) pickDog(ctx context.Context) (animal.Animal, error) {
 }
 
 func (h *Sessions) load(w http.ResponseWriter, r *http.Request) (*session.Session, bool) {
-	s, ok := h.store.Get(r.PathValue("id"))
-	if !ok {
+	s, err := h.store.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		// a bare ErrNotFound is a plain miss, anything else carries a
+		// cause worth a log line: a dog gone from the pool, an unreadable row
+		if err != session.ErrNotFound {
+			log.Printf("session %s: %v", r.PathValue("id"), err)
+		}
+		// unknown, expired or unreadable: the client starts a clean run
 		http.Error(w, "that life is not here", http.StatusNotFound)
 		return nil, false
 	}
 	return s, true
+}
+
+// snapshot persists after a transition. A failed save is logged, never
+// shown, the in memory session is still the live truth for this process.
+// The request context is not used, a client hanging up mid transition
+// must not skip the write.
+func (h *Sessions) snapshot(ctx context.Context, s *session.Session) {
+	if err := h.store.Put(context.WithoutCancel(ctx), s, h.now()); err != nil {
+		log.Printf("session %s: snapshot: %v", s.ID, err)
+	}
 }
 
 func (h *Sessions) view(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +167,7 @@ func (h *Sessions) vocalize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
+	h.snapshot(r.Context(), s)
 	writeJSON(w, http.StatusOK, s.View(h.now()))
 }
 
@@ -136,6 +180,7 @@ func (h *Sessions) advance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
+	h.snapshot(r.Context(), s)
 	writeJSON(w, http.StatusOK, s.View(h.now()))
 }
 

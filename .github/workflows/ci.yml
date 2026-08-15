@@ -7,10 +7,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
-      - run: test -f go.mod && go vet ./... || echo "no go module yet"
-      - run: test -f go.mod && go test ./... || echo "no go module yet"
+          go-version-file: go.mod
+      # a red step is a red run, the day zero "no module yet" guards are gone
+      - run: go vet ./...
+      - run: go test -race ./...
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: test -f web/package.json && cd web && npm ci && npm run typecheck && npm test -- --run || echo "no web package yet"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test -- --run
+        working-directory: web
