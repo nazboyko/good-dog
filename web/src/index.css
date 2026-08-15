@@ -74,3 +74,165 @@ button:hover {
   font-size: 12px;
   padding-top: 4px;
 }
+
+/* the run: quiet, unhurried, warm on dark, nothing decorative */
+.run {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  line-height: 1.55;
+  max-width: 620px;
+}
+
+.run h1 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: #9a917d;
+}
+
+.run button {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  margin: 18px 0 0;
+  padding: 10px 18px;
+}
+
+.beat-line {
+  margin: 0 0 14px;
+  animation: settle 900ms ease-out both;
+}
+
+.beat-self {
+  color: #cdb97a;
+  font-style: italic;
+}
+
+@keyframes settle {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.panel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.panel button {
+  margin: 0;
+  width: 100%;
+}
+
+.narrator {
+  margin-top: 18px;
+  padding-left: 14px;
+  border-left: 2px solid #4a4436;
+}
+
+.narrator-meant,
+.narrator-heard {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
+.narrator-meant { color: #cdb97a; }
+.narrator-heard { color: #9fb4c9; }
+
+.run-night { background: #0c0b0a; }
+
+.radio {
+  margin: 8px 0 0;
+  padding-left: 14px;
+  border-left: 2px solid #4a4436;
+  color: #cbc3b2;
+}
+
+.radio p {
+  margin: 0 0 12px;
+  opacity: 0;
+  animation: settle 1200ms ease-out forwards;
+}
+
+/* the reveal: each thing appears alone, the photo appears here first */
+.reveal {
+  cursor: default;
+}
+
+.reveal-line {
+  margin: 0 0 22px;
+  animation: settle 1400ms ease-out both;
+}
+
+.reveal-photo {
+  margin: 8px 0 22px;
+  animation: photo-in 2200ms ease-out both;
+}
+
+.reveal-photo img {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: 3px;
+}
+
+@keyframes photo-in {
+  from { opacity: 0; filter: saturate(0.4) blur(6px); }
+  to { opacity: 1; filter: none; }
+}
+
+.reveal-facts {
+  animation: settle 1400ms ease-out both;
+  color: #cbc3b2;
+  font-size: 18px;
+}
+
+.reveal-facts p { margin: 0 0 8px; }
+
+.reveal-quotes {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-style: italic;
+  color: #b8ae9a;
+}
+
+.reveal-meet {
+  display: inline-block;
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: #e8e2d5;
+  background: #2c2820;
+  border: 1px solid #6a624f;
+  border-radius: 4px;
+  padding: 12px 22px;
+  text-decoration: none;
+  animation: settle 1400ms ease-out both;
+}
+
+.reveal-meet:hover { background: #3a3428; }
+
+.error {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  color: #d98a7a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beat-line, .reveal-line, .reveal-photo, .reveal-facts, .reveal-meet, .radio p {
+    animation-duration: 1ms;
+  }
+}
+
+.reveal-quotes-lead {
+  margin: 12px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: #9a917d;
+}

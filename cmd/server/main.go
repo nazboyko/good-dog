@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/nazboyko/good-dog/internal/animal"
 	"github.com/nazboyko/good-dog/internal/audiocache"
 	"github.com/nazboyko/good-dog/internal/config"
+	"github.com/nazboyko/good-dog/internal/dogsheet"
 	"github.com/nazboyko/good-dog/internal/elevenlabs"
 	"github.com/nazboyko/good-dog/internal/gemini"
 	"github.com/nazboyko/good-dog/internal/httpapi"
@@ -43,7 +45,22 @@ func main() {
 	const ttsCacheDir = "cache/audio"
 	ttsCache := audiocache.New(ttsCacheDir)
 
+	provider, err := animal.NewFixtureProvider("fixtures/dogs.json")
+	if err != nil {
+		log.Fatalf("load fixtures: %v", err)
+	}
+	// a typed nil must not sneak into the interface, the compiler checks
+	// for a nil Generator and serves the default sheet
+	var llm dogsheet.Generator
+	if geminiClient != nil {
+		llm = geminiClient
+	}
+	compiler := dogsheet.NewCompiler(llm, dogsheet.NewCache("cache/sheets"))
+	// Venus first for the playtest, unset FIRST_DOG for the pool
+	sessions := httpapi.NewSessions(provider, compiler, os.Getenv("FIRST_DOG"))
+
 	mux := http.NewServeMux()
+	sessions.Register(mux)
 	mux.HandleFunc("GET /events", httpapi.Events())
 	mux.HandleFunc("GET /api/audio/{file}", httpapi.Audio("assets/audio", ttsCacheDir))
 	mux.HandleFunc("GET /api/spike/gemini", httpapi.SpikeGemini(geminiClient))

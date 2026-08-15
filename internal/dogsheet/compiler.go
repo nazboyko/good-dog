@@ -12,18 +12,20 @@ import (
 	"github.com/nazboyko/good-dog/internal/gemini"
 )
 
-// generator is the slice of the gemini client the compiler needs,
+// Generator is the slice of the gemini client the compiler needs,
 // tests script it without any network.
-type generator interface {
+type Generator interface {
 	GenerateJSON(ctx context.Context, prompt string, opts gemini.Options) ([]byte, error)
 }
 
 type Compiler struct {
-	llm   generator
+	llm   Generator
 	cache *Cache
 }
 
-func NewCompiler(llm generator, cache *Cache) *Compiler {
+// NewCompiler accepts a nil Generator: with no model every dog gets the
+// default sheet, and cached sheets still serve.
+func NewCompiler(llm Generator, cache *Cache) *Compiler {
 	return &Compiler{llm: llm, cache: cache}
 }
 
@@ -35,6 +37,9 @@ func (c *Compiler) Compile(ctx context.Context, a animal.Animal) (*DogSheet, err
 	}
 
 	facts := StructuredFacts(a)
+	if c.llm == nil {
+		return c.fallback(a, facts, errors.New("no model configured"))
+	}
 	extracted, err := c.extract(ctx, a.Description)
 	if err != nil {
 		return c.fallback(a, facts, fmt.Errorf("extraction: %w", err))

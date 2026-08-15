@@ -59,7 +59,7 @@ const goodSheet = `{
   "radio_seed": {"value": "Somewhere in the big room, Biscuit is dreaming about tennis balls.", "cites": ["f1", "f6"]}
 }`
 
-func newTestCompiler(t *testing.T, llm generator) *Compiler {
+func newTestCompiler(t *testing.T, llm Generator) *Compiler {
 	t.Helper()
 	return NewCompiler(llm, NewCache(t.TempDir()))
 }
@@ -192,6 +192,14 @@ func TestCompileFallsBackToDefaultOnAPIError(t *testing.T) {
 	}
 	if sheet.RadioSeed.Value == "" {
 		t.Error("default sheet needs a radio seed")
+	}
+}
+
+func TestCompileWithNoModelServesDefault(t *testing.T) {
+	sheet, err := NewCompiler(nil, NewCache(t.TempDir())).Compile(context.Background(), testDog)
+	var degraded *Degraded
+	if sheet == nil || !sheet.Default || !errors.As(err, &degraded) {
+		t.Fatalf("no model must still hand back a playable default sheet, got %v %v", sheet, err)
 	}
 }
 
