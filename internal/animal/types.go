@@ -1,6 +1,9 @@
 package animal
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Status is the whole lifecycle the game is allowed to know about.
 // The word adopted is only ever true with ADOPTED_CONFIRMED.
@@ -22,22 +25,58 @@ func ValidStatus(s Status) bool {
 	return false
 }
 
+// The two ways a provider can tell us a dog is a long stay animal:
+// where it filed the dog, or what the listing itself says.
+const (
+	LongStayPlacement = "placement"
+	LongStaySentence  = "listing sentence"
+)
+
+// ValidLongStay keeps the flag and its evidence in step. A dog is filed
+// as long stay for a reason we can name, or not at all.
+func ValidLongStay(a Animal) error {
+	if !a.LongStay {
+		if a.LongStayEvidence != "" {
+			return fmt.Errorf("has long_stay_evidence %q without long_stay", a.LongStayEvidence)
+		}
+		return nil
+	}
+	switch a.LongStayEvidence {
+	case LongStayPlacement, LongStaySentence:
+		return nil
+	case "":
+		return fmt.Errorf("is long_stay with no evidence, use %q or %q", LongStayPlacement, LongStaySentence)
+	default:
+		return fmt.Errorf("has unknown long_stay_evidence %q", a.LongStayEvidence)
+	}
+}
+
 // Animal is the normalized internal shape. Provider payloads stop at the
 // adapter, the rest of the game only ever sees this.
 type Animal struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Breed       string    `json:"breed"`
-	AgeGroup    string    `json:"age_group"`
-	Sex         string    `json:"sex"`
-	Size        string    `json:"size"`
-	Description string    `json:"description"`
-	PhotoURL    string    `json:"photo_url"`
-	PhotoLocal  string    `json:"photo_local"`
-	ListingURL  string    `json:"listing_url"`
-	OrgID       string    `json:"org_id"`
-	Status      Status    `json:"status"`
-	RetrievedAt time.Time `json:"retrieved_at"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Breed    string `json:"breed"`
+	AgeGroup string `json:"age_group"`
+	Sex      string `json:"sex"`
+	Size     string `json:"size"`
+	// AgeText and WeightText are the listing's own words, kept verbatim and
+	// never parsed into numbers. Empty when the listing does not say.
+	AgeText    string `json:"age_text,omitempty"`
+	WeightText string `json:"weight_text,omitempty"`
+	// LongStay is set when the provider files the dog as a long stay
+	// animal. The claim is that filing, never a guess at how long.
+	// LongStayEvidence records how we know, since the fact reads the
+	// same either way and the source would otherwise be lost.
+	LongStay         bool      `json:"long_stay,omitempty"`
+	LongStayEvidence string    `json:"long_stay_evidence,omitempty"`
+	Description      string    `json:"description"`
+	PhotoURL         string    `json:"photo_url"`
+	PhotoLocal       string    `json:"photo_local"`
+	ListingURL       string    `json:"listing_url"`
+	OrgID            string    `json:"org_id"`
+	Status           Status    `json:"status"`
+	RetrievedAt      time.Time `json:"retrieved_at"`
 	// Synthetic marks shape examples, they must never reach a player
 	Synthetic bool `json:"synthetic,omitempty"`
 }

@@ -16,8 +16,16 @@ func StructuredFacts(a animal.Animal) []VerifiedFact {
 		{"field:name", a.Name},
 		{"field:breed", a.Breed},
 		{"field:age_group", a.AgeGroup},
+		{"field:age_text", a.AgeText},
 		{"field:sex", a.Sex},
 		{"field:size", a.Size},
+		{"field:weight_text", a.WeightText},
+	}
+	// the fact is where the provider filed her, not a length of time
+	if a.LongStay {
+		fields = append(fields, struct{ source, value string }{
+			"field:long_stay", "listed among this organization's long stay animals",
+		})
 	}
 	var facts []VerifiedFact
 	for _, f := range fields {

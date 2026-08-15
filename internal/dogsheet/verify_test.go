@@ -155,6 +155,50 @@ func TestStructuredFacts(t *testing.T) {
 	}
 }
 
+func TestStructuredFactsKeepListingWordsForAgeAndWeight(t *testing.T) {
+	dog := testDog
+	dog.AgeText = "8 years 1 month"
+	dog.WeightText = "49 pounds"
+
+	values := map[string]string{}
+	for _, f := range StructuredFacts(dog) {
+		values[f.Source] = f.Value
+	}
+	if got := values["field:age_text"]; got != "8 years 1 month" {
+		t.Errorf("age_text fact = %q, the listing words must survive whole", got)
+	}
+	if got := values["field:weight_text"]; got != "49 pounds" {
+		t.Errorf("weight_text fact = %q, the listing words must survive whole", got)
+	}
+}
+
+func TestStructuredFactsRecordLongStayPlacementOnly(t *testing.T) {
+	if sources := sourcesOf(StructuredFacts(testDog)); sources["field:long_stay"] != "" {
+		t.Errorf("a dog with no long stay placement must not carry the fact, got %q", sources["field:long_stay"])
+	}
+
+	dog := testDog
+	dog.LongStay = true
+	value := sourcesOf(StructuredFacts(dog))["field:long_stay"]
+	if value == "" {
+		t.Fatal("long stay placement did not become a fact")
+	}
+	// the shelter said where she is filed, not how long she has waited
+	for _, guess := range []string{"days", "weeks", "months", "years", "longest"} {
+		if strings.Contains(value, guess) {
+			t.Errorf("long stay fact %q claims a duration the provider never gave", value)
+		}
+	}
+}
+
+func sourcesOf(facts []VerifiedFact) map[string]string {
+	out := map[string]string{}
+	for _, f := range facts {
+		out[f.Source] = f.Value
+	}
+	return out
+}
+
 func TestVerifiedDescriptionFacts(t *testing.T) {
 	kept, dropped := VerifiedDescriptionFacts(
 		[]string{"Loves tennis balls", "Was a show dog in another life", "loves TENNIS balls"},

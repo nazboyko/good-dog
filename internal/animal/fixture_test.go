@@ -23,8 +23,10 @@ func TestFixtureProviderLoadsExampleShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pool) != 0 {
-		t.Fatalf("pool has %d dogs, synthetic shape examples must never be served", len(pool))
+	for _, a := range pool {
+		if a.Synthetic {
+			t.Errorf("synthetic dog %s was served to a player", a.ID)
+		}
 	}
 
 	got, err := p.GetAnimal(ctx, "example-1")
@@ -80,6 +82,12 @@ func TestFixtureProviderRejectsBrokenFiles(t *testing.T) {
 		"unknown org":      strings.Replace(validFixtureJSON, `"org_id": "org-1"`, `"org_id": "ghost"`, 1),
 		"no retrieved_at":  strings.Replace(validFixtureJSON, `, "retrieved_at": "2026-08-14T23:00:00Z"`, "", 1),
 		"duplicate dog id": strings.Replace(validFixtureJSON, `"dogs": [`, `"dogs": [`+validDogJSON+",", 1),
+		"long stay with no evidence": strings.Replace(validFixtureJSON,
+			`"id": "real-1",`, `"id": "real-1", "long_stay": true,`, 1),
+		"long stay with unknown evidence": strings.Replace(validFixtureJSON,
+			`"id": "real-1",`, `"id": "real-1", "long_stay": true, "long_stay_evidence": "a hunch",`, 1),
+		"evidence without the flag": strings.Replace(validFixtureJSON,
+			`"id": "real-1",`, `"id": "real-1", "long_stay_evidence": "placement",`, 1),
 	}
 	for name, content := range cases {
 		if _, err := newFixtureFromString(t, content); err == nil {

@@ -62,6 +62,9 @@ func NewFixtureProvider(path string) (*FixtureProvider, error) {
 		if _, ok := p.orgs[a.OrgID]; !ok {
 			return nil, fmt.Errorf("dog %s references unknown org %q", a.ID, a.OrgID)
 		}
+		if err := ValidLongStay(a); err != nil {
+			return nil, fmt.Errorf("dog %s %w", a.ID, err)
+		}
 		// no invented timestamps, layer one never hallucinates
 		if a.RetrievedAt.IsZero() {
 			return nil, fmt.Errorf("dog %s has no retrieved_at, set the curation moment", a.ID)
