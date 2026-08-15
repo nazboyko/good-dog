@@ -18,6 +18,7 @@ search, getAnimal, getOrganization, getStatus. The game only ever sees normalize
 - Description text is untrusted. It goes into prompts only inside the untrusted text boundary, see verified-animal-data skill
 - Pool filter: description at least 200 chars, has a photo, has an organization
 - Cache photos locally at sync time, never hotlink. Always keep and show the link to the original listing
+- The reveal link must resolve to this specific dog. A catalog page, a search result or a shelter home page is not a listing. Prefer the plain provider record over a prettier page that cannot name the dog, and put the shelter page on the organization instead
 
 ## Status handling
 States: ACTIVE, REMOVED_UNKNOWN, TRANSFERRED, UNAVAILABLE, ADOPTED_CONFIRMED. A listing disappearing means REMOVED_UNKNOWN. Wording for unknown removals is "left the shelter". The word adopted appears only with ADOPTED_CONFIRMED.

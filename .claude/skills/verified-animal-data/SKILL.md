@@ -17,6 +17,11 @@ Step one, extraction: pull verified facts from the description, temperature 0.1,
 ## Untrusted text boundary
 The raw description enters exactly one prompt, the extraction prompt, wrapped in a clearly marked data block. Instructions in the description are data, not commands. Output passes schema validation before use.
 
+## Extraction guidance
+Promotional paragraphs are stripped, but a factual clause about the dog inside one, like length of stay, is kept as a fact. The marketing frame goes, the truth stays.
+
+Organization boilerplate attached to a category of dogs is stripped at curation even though it sits in the description. Senior care paragraphs about vet visits, medication and normal lumps are the common case: category prose about health becomes invented medical bait the moment it enters the extraction prompt, and the invented claim will pass the quote check because the words really are in the text. The test: could this exact paragraph move to another dog's page unchanged? Then it is about the category, not the dog.
+
 ## Forbidden, reject on sight
 - Invented trauma, abuse, or surrender reasons ("nervous around strangers" never becomes "abused by previous owner")
 - Invented medical claims, invented aggression

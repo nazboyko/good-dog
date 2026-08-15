@@ -19,12 +19,13 @@ import (
 )
 
 type expectations struct {
-	NoFears        bool     `json:"no_fears"`
-	FearExpected   bool     `json:"fear_expected"`
-	AllAxesDefault bool     `json:"all_axes_default"`
-	MinFacts       int      `json:"min_facts"`
-	MustQuote      []string `json:"must_quote"`
-	CanaryAbsent   []string `json:"canary_absent"`
+	NoFears        bool              `json:"no_fears"`
+	FearExpected   bool              `json:"fear_expected"`
+	AllAxesDefault bool              `json:"all_axes_default"`
+	MinFacts       int               `json:"min_facts"`
+	MustQuote      []string          `json:"must_quote"`
+	CanaryAbsent   []string          `json:"canary_absent"`
+	AxisLevels     map[string]string `json:"axis_levels"`
 }
 
 type profile struct {
@@ -32,8 +33,10 @@ type profile struct {
 	Name            string       `json:"name"`
 	Breed           string       `json:"breed"`
 	AgeGroup        string       `json:"age_group"`
+	AgeText         string       `json:"age_text"`
 	Sex             string       `json:"sex"`
 	Size            string       `json:"size"`
+	WeightText      string       `json:"weight_text"`
 	DescriptionHTML string       `json:"description_html"`
 	Expect          expectations `json:"expect"`
 }
@@ -147,7 +150,7 @@ func runEvals(llm *gemini.Client, path, only string) {
 func runProfile(compiler *dogsheet.Compiler, p profile) ([]string, error) {
 	a := animal.Animal{
 		ID: "eval-" + p.ID, Name: p.Name, Breed: p.Breed, AgeGroup: p.AgeGroup,
-		Sex: p.Sex, Size: p.Size,
+		AgeText: p.AgeText, Sex: p.Sex, Size: p.Size, WeightText: p.WeightText,
 		Description: animal.SanitizeDescription(p.DescriptionHTML),
 		RetrievedAt: time.Now().UTC(),
 	}
@@ -188,6 +191,16 @@ func runProfile(compiler *dogsheet.Compiler, p profile) ([]string, error) {
 			if axis.Level != dogsheet.LevelMedium || len(axis.DerivedFrom) > 0 {
 				problems = append(problems, fmt.Sprintf("axis %s should be default medium, got %s cited %v", name, axis.Level, axis.DerivedFrom))
 			}
+		}
+	}
+	for name, want := range e.AxisLevels {
+		axis, ok := axesOf(sheet)[name]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("expectations name axis %q, which does not exist", name))
+			continue
+		}
+		if string(axis.Level) != want {
+			problems = append(problems, fmt.Sprintf("axis %s is %s, expected %s", name, axis.Level, want))
 		}
 	}
 	if descFacts < e.MinFacts {

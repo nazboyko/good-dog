@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Grounding eval profiles, synthetic on purpose, never shown to players. Each profile stresses one failure mode. expect knobs are mechanical: no_fears, fear_expected, all_axes_default, min_facts, must_quote (at least one kept fact contains it), canary_absent (must appear in no sheet string). The runner also re-verifies every sheet with the grounding verifier and fails on any hallucination class.",
+  "note": "Grounding eval profiles, never shown to players. Each profile stresses one failure mode. Most are synthetic. senior-high-energy and fearful-restricted mirror real fixture dogs, because no invented listing carries a contradiction or a stack of restrictions as honestly as a real one. Keep them in step with the fixture entry they copy. expect knobs are mechanical: no_fears, fear_expected, all_axes_default, min_facts, must_quote (at least one kept fact contains it), canary_absent (must appear in no sheet string), axis_levels (named matrix axis sits at that exact level). The runner also re-verifies every sheet with the grounding verifier and fails on any hallucination class.",
   "profiles": [
     {
       "id": "sparse",
@@ -39,6 +39,18 @@
       "expect": { "canary_absent": ["arthritis", "joint pain", "hips are bad"], "no_fears": true }
     },
     {
+      "id": "senior-high-energy",
+      "name": "Bella", "breed": "Mountain Cur / American Staffordshire Terrier", "age_group": "Senior", "sex": "Female", "size": "Medium",
+      "age_text": "8 years 1 month", "weight_text": "49 pounds",
+      "description_html": "<p>My family moved and could not keep me, so I came to Animal Humane Society to find a new home.</p><p>I'm a high energy, playful dog. I'll need plenty of physical activity, mental stimulation, and ongoing training to help me grow into a well-mannered companion.</p><p>I'm an affectionate dog that loves being close and sharing snuggles. I may need a little time to feel fully comfortable in a new space, but a home with moderate activity will help me settle in.</p><p>I’m a little uncomfortable around other animals at first and require extra time, patience, and space when I am introduced to resident pets. I need to get used to other animals slowly and in small steps.</p><p>I don’t like to share valuable items or my food with other people or pets and have trouble when items are taken away from me. I will need my family to manage this behavior.</p>",
+      "expect": {
+        "axis_levels": { "energy": "high" },
+        "must_quote": ["high energy"],
+        "min_facts": 3,
+        "canary_absent": ["slowing down", "slows down", "calm senior", "gentle senior", "her age", "for her age", "getting older", "old age", "age related", "not as young", "golden years", "gray muzzle", "arthritis", "joint pain", "short walks are enough"]
+      }
+    },
+    {
       "id": "puppy",
       "name": "Turnip", "breed": "Shepherd mix", "age_group": "Baby", "sex": "Male", "size": "Small",
       "description_html": "<p>Turnip is a four month old shepherd mix learning everything for the first time. He chases leaves, naps mid play, and thinks shoelaces are the enemy. A confident little explorer who follows staff everywhere.</p>",
@@ -55,6 +67,18 @@
       "name": "Willow", "breed": "Whippet mix", "age_group": "Adult", "sex": "Female", "size": "Medium",
       "description_html": "<p>Willow is a sweet and gentle girl who adores soft blankets and quiet evenings. She is afraid of thunderstorms and hides in the bathroom until they pass. With patient people she blossoms into a cuddly shadow who follows you room to room.</p>",
       "expect": { "fear_expected": true, "must_quote": ["thunderstorms"] }
+    },
+    {
+      "id": "fearful-restricted",
+      "name": "Ripley", "breed": "Pit Bull Terrier mix", "age_group": "Adult", "sex": "Female", "size": "Medium",
+      "age_text": "5 years 1 month", "weight_text": "41 pounds",
+      "description_html": "<p>I came to Animal Humane Society as a stray. No one claimed me, so now I’m looking for a new home.</p><p>If you're looking for a snuggly companion, I'm your match. I thrive on affection and close interactions. I might be a bit reserved at first while I adjust, but I'll warm up quickly in a calm, moderately active home.</p><p>I've got lots of energy and enthusiasm! I'll thrive with regular exercise, mental stimulation, and consistent training to help me channel that energy in positive ways and build good manners. </p><p>Young children make me a little nervous. I need to go to a home without kids under the age of eight.</p><p>I need to go to a home without dogs.</p><p>I don’t like to share valuable items or my food with other people or pets and have trouble when items are taken away from me. I will need my family to manage this behavior.</p>",
+      "expect": {
+        "fear_expected": true,
+        "must_quote": ["make me a little nervous", "under the age of eight", "without dogs"],
+        "min_facts": 4,
+        "canary_absent": ["aggressive", "aggression", "reactive", "dangerous", "attacked", "abused", "mistreated", "neglected", "abandoned"]
+      }
     },
     {
       "id": "medical-in-listing",
