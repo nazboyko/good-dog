@@ -13,11 +13,11 @@ func TestSanitizeDescriptionMessyHTML(t *testing.T) {
 <P CLASS="x">Gentle   with    kids.</P>`
 
 	got := SanitizeDescription(raw)
-	want := "Meet Biscuit ! She & her ball are inseparable. House trained. Loves walks. Gentle with kids."
+	want := "Meet Biscuit ! She & her ball are inseparable.\nHouse trained.\nLoves walks.\nGentle with kids."
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
-	for _, forbidden := range []string{"<", ">", "alert", "display: none", "\n", "  "} {
+	for _, forbidden := range []string{"<", ">", "alert", "display: none", "  "} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("sanitized text still contains %q: %q", forbidden, got)
 		}
@@ -26,7 +26,9 @@ func TestSanitizeDescriptionMessyHTML(t *testing.T) {
 
 func TestSanitizeDescriptionBlockTagsKeepFactEdges(t *testing.T) {
 	raw := `<ul><li>Housetrained and gentle</li><li>Happy to nap</li></ul><p>Loves sunny spots</p>`
-	want := "Housetrained and gentle. Happy to nap. Loves sunny spots."
+	// each block on its own line: the extractor sees the edges and the
+	// transparency panel can show the paragraphs as written
+	want := "Housetrained and gentle.\nHappy to nap.\nLoves sunny spots."
 	if got := SanitizeDescription(raw); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

@@ -1,11 +1,13 @@
 import type { View, Vocalization } from "../engine/run";
 import { VOCALIZATION_LABELS } from "../engine/run";
 import { forDisplay } from "../engine/display";
+import { useViewTop } from "./useViewTop";
 
 // One small component per beat. Presentation only: the engine decides
 // what is on the view and the server decides what a signal means.
 
 export function Wake({ view, onNext }: { view: View; onNext: () => void }) {
+  useViewTop();
   return (
     <section className="beat">
       <p className="beat-line">Morning. The floor is cold. Somewhere a bowl clinks.</p>
@@ -19,6 +21,7 @@ export function Wake({ view, onNext }: { view: View; onNext: () => void }) {
 }
 
 export function Scent({ view, onNext }: { view: View; onNext: () => void }) {
+  useViewTop();
   return (
     <section className="beat">
       <p className="beat-line">A trail on the floor. Someone walked here before you.</p>
@@ -38,6 +41,7 @@ export function Visitor({
   onSignal: (v: Vocalization) => void;
   onNext: () => void;
 }) {
+  useViewTop();
   const visitor = view.visitor;
   if (!visitor) return null;
   const answered = Boolean(visitor.signal);
@@ -76,6 +80,7 @@ export function Visitor({
 }
 
 export function Night({ view, onNext }: { view: View; onNext: () => void }) {
+  useViewTop();
   return (
     <section className="beat beat-night">
       <p className="beat-line">Lights out. Somewhere down the hall, a radio.</p>

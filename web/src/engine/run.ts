@@ -138,6 +138,21 @@ export function revealedCount(elapsedMs: number, steps: Steps = REVEAL_STEPS): n
   return revealSchedule(steps).filter((s) => elapsedMs >= s.at).length;
 }
 
+// easeInOut is the curve the fold follow rides: it starts and ends at
+// rest, so the view never lurches. t in [0, 1] to progress in [0, 1].
+export function easeInOut(t: number): number {
+  const c = Math.min(1, Math.max(0, t));
+  return c < 0.5 ? 2 * c * c : 1 - Math.pow(-2 * c + 2, 2) / 2;
+}
+
+// followTarget is how far the view must move so a line's bottom edge
+// sits just above the fold. Zero when it is already visible, so nothing
+// scrolls unless it has to.
+export function followTarget(lineBottom: number, viewportHeight: number, margin = 12): number {
+  const overflow = lineBottom - (viewportHeight - margin);
+  return overflow > 0 ? overflow : 0;
+}
+
 // skipAhead returns the elapsed time that shows exactly one more step
 // than now, so a click brings the next line forward without shifting
 // every later pause. Past the end it returns the time unchanged.

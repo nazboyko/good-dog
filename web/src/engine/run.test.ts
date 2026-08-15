@@ -111,3 +111,25 @@ test("minutes phrase reads like a person wrote it", async () => {
   expect(minutesPhrase(1)).toBe("one minute");
   expect(minutesPhrase(38)).toBe("38 minutes");
 });
+
+test("the fold follow moves only as far as needed and rides an eased curve", async () => {
+  const { easeInOut, followTarget } = await import("./run");
+  // a line already on screen asks for no movement at all
+  expect(followTarget(500, 800)).toBe(0);
+  expect(followTarget(788, 800)).toBe(0);
+  // a line 61px below the fold asks for 61 plus the margin
+  expect(followTarget(861, 800)).toBe(73);
+  // the curve rests at both ends and is monotonic in between
+  expect(easeInOut(0)).toBe(0);
+  expect(easeInOut(1)).toBe(1);
+  expect(easeInOut(0.5)).toBe(0.5);
+  let last = 0;
+  for (let t = 0; t <= 1; t += 0.05) {
+    const v = easeInOut(t);
+    expect(v).toBeGreaterThanOrEqual(last);
+    last = v;
+  }
+  // and it clamps outside the range, so an overshoot frame never lurches
+  expect(easeInOut(1.4)).toBe(1);
+  expect(easeInOut(-0.2)).toBe(0);
+});

@@ -1,13 +1,20 @@
 import type { EpilogueView } from "../engine/run";
 import { forDisplay } from "../engine/display";
+import { useViewTop } from "./useViewTop";
 
 // The transparency panel entry point: the listing as written, next to
 // what the game took from it. Reachable only from the reveal, after the
 // photo, never before. The record keeps the truth, every listing field
 // the game used is on this page, so the promise below is whole.
 export function AboutListing({ view, onBack }: { view: EpilogueView; onBack: () => void }) {
+  useViewTop();
   const l = view.listing;
   const quotes = l.quotes ?? [];
+  // the sanitizer keeps each block of the listing on its own line
+  const paragraphs = l.description
+    .split("\n")
+    .map(forDisplay)
+    .filter((p) => p.replace(/[.\s]/g, "") !== "");
   return (
     <section className="about">
       <h2>About {view.name}, from the listing</h2>
@@ -66,12 +73,19 @@ export function AboutListing({ view, onBack }: { view: EpilogueView; onBack: () 
         </>
       )}
       <h3>The full listing text</h3>
-      <p className="about-description">{forDisplay(l.description)}</p>
+      <blockquote className="quoted">
+        {paragraphs.map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+      </blockquote>
+      <p className="quoted-source">
+        {view.org_name}, {view.org_city}, {view.org_state}
+      </p>
       <div className="about-actions">
-        <a className="reveal-meet" href={view.listing_url} target="_blank" rel="noopener noreferrer">
+        <a className="btn btn-primary" href={view.listing_url} target="_blank" rel="noopener noreferrer">
           meet {view.name}
         </a>
-        <button type="button" onClick={onBack}>
+        <button type="button" className="btn-quiet" onClick={onBack}>
           back
         </button>
       </div>

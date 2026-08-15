@@ -22,8 +22,10 @@ var (
 )
 
 // SanitizeDescription strips html down to plain text. Block tags become
-// sentence breaks so extracted facts keep their edges. The text is still
-// untrusted and enters prompts only inside the untrusted text boundary.
+// sentence breaks on their own lines, so extracted facts keep their edges
+// and the transparency panel can show the listing's paragraphs. The text
+// is still untrusted and enters prompts only inside the untrusted text
+// boundary.
 func SanitizeDescription(raw string) string {
 	text := scriptBlocks.ReplaceAllString(raw, " ")
 	text = styleBlocks.ReplaceAllString(text, " ")
@@ -44,7 +46,7 @@ func SanitizeDescription(raw string) string {
 		}
 		sentences = append(sentences, line)
 	}
-	return strings.Join(sentences, " ")
+	return strings.Join(sentences, "\n")
 }
 
 const minDescriptionChars = 200

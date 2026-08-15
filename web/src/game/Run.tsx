@@ -3,6 +3,7 @@ import type { View, Vocalization } from "../engine/run";
 import { advance, startRun, vocalize } from "../engine/run";
 import { Night, Scent, Visitor, Wake } from "./Beats";
 import { Reveal } from "./Reveal";
+import { useViewTop } from "./useViewTop";
 
 // The run shell. Holds the current view and calls the engine. Which
 // beat comes next is the server's decision, this only asks.
@@ -25,17 +26,7 @@ export function Run() {
   };
 
   if (!view) {
-    return (
-      <main className="run run-start">
-        <h1>GOOD DOG</h1>
-        <p>You are about to spend a little while as a dog in a shelter.</p>
-        <p>The dog is real.</p>
-        <button onClick={() => guard(startRun)} disabled={busy}>
-          wake up
-        </button>
-        {error && <p className="error">{error}</p>}
-      </main>
-    );
+    return <Start onStart={() => guard(startRun)} busy={busy} error={error} />;
   }
 
   const next = () => guard(() => advance(view.session_id));
@@ -52,5 +43,20 @@ export function Run() {
       )}
       {error && <p className="error">{error}</p>}
     </main>
+  );
+}
+
+function Start({ onStart, busy, error }: { onStart: () => void; busy: boolean; error: string | null }) {
+  useViewTop();
+  return (
+      <main className="run run-start">
+        <h1>GOOD DOG</h1>
+        <p>You are about to spend a little while as a dog in a shelter.</p>
+        <p>The dog is real.</p>
+        <button onClick={onStart} disabled={busy}>
+          wake up
+        </button>
+        {error && <p className="error">{error}</p>}
+      </main>
   );
 }

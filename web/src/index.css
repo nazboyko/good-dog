@@ -75,149 +75,235 @@ button:hover {
   padding-top: 4px;
 }
 
-/* the run: quiet, unhurried, warm on dark, nothing decorative */
+
+/* ============================================================
+   the game. one system: tokens, one type family for everything
+   the player reads, one button pair, one reading frame, and one
+   motion pattern. rules live in docs/frontend-notes.md.
+   ============================================================ */
+
+:root {
+  --ink: #e8e2d5;
+  --ink-soft: #cbc3b2;
+  --ink-mute: #9a917d;
+  --ink-warm: #cdb97a;
+  --ink-cool: #9fb4c9;
+  --ground: #14120f;
+  --ground-night: #0c0b0a;
+  --raised: #2c2820;
+  --raised-hover: #3a3428;
+  --line: #4a4436;
+  --line-strong: #6a624f;
+  --danger: #d98a7a;
+
+  --serif: Georgia, "Times New Roman", serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* the reading size scales gently with the viewport, never below 17px */
+  --text: clamp(17px, 1.1rem + 0.4vw, 20px);
+  --text-small: 15px;
+  --leading: 1.55;
+
+  --measure: 65ch;
+  --tap: 44px;
+
+  --fade-quiet: 520ms;
+  --fade-quick: 200ms;
+  --fade-photo: 1400ms;
+}
+
+/* ---- the run shell ---- */
+
 .run {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 20px;
-  line-height: 1.55;
+  /* every view opens at its top, no dead space above the content, and
+     the button lands where a thumb can reach it on a phone */
+  justify-content: flex-start;
+  font-family: var(--serif);
+  font-size: var(--text);
+  line-height: var(--leading);
   max-width: 620px;
+  padding: 24px 20px;
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+  overflow-x: hidden;
 }
 
 .run h1 {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 14px;
   letter-spacing: 0.2em;
-  color: #9a917d;
+  color: var(--ink-mute);
 }
 
-.run button {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 15px;
-  margin: 18px 0 0;
-  padding: 10px 18px;
+.run-night { background: var(--ground-night); }
+
+/* ---- the button pair: primary and quiet, same family as the text ---- */
+
+.run button,
+.run .btn {
+  font-family: var(--serif);
+  font-size: var(--text-small);
+  line-height: 1;
+  min-height: var(--tap);
+  padding: 0 22px;
+  margin: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: background var(--fade-quick) ease, color var(--fade-quick) ease, border-color var(--fade-quick) ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.beat-line {
-  margin: 0 0 14px;
-  animation: settle 900ms ease-out both;
+/* quiet: the default. dark ground, thin line, warm text */
+.run button,
+.run .btn-quiet {
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
 }
 
-/* the one pattern for anything that appears or disappears: it is in the
-   dom with its space reserved, and only opacity changes. quiet moments
-   take a slow fade, interactive feedback a quick one. */
-.fade {
-  opacity: 0;
-  transition: opacity 520ms ease;
+.run button:hover,
+.run .btn-quiet:hover {
+  background: var(--raised-hover);
 }
 
-.fade-quick {
-  opacity: 0;
-  transition: opacity 200ms ease;
+/* primary: the one loud thing on a screen. light ground, dark text,
+   small caps in the same family. at most one per screen. */
+.run .btn-primary {
+  background: var(--ink);
+  color: var(--ground);
+  border: 1px solid var(--ink);
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  font-size: calc(var(--text-small) + 2px);
+  padding: 0 28px;
+  min-height: calc(var(--tap) + 4px);
 }
 
-.fade.is-shown,
-.fade-quick.is-shown {
-  opacity: 1;
+.run .btn-primary:hover {
+  background: #fff8ea;
+  border-color: #fff8ea;
 }
 
-.beat-self {
-  color: #cdb97a;
-  font-style: italic;
+/* link: no chrome, underline, for the one quiet link under a primary */
+.run .btn-link {
+  background: none;
+  border: none;
+  color: var(--ink-mute);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 0;
+  min-height: var(--tap);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
+
+.run .btn-link:hover { color: var(--ink-soft); background: none; }
+
+.run button:focus-visible,
+.run .btn:focus-visible {
+  outline: 2px solid var(--ink-warm);
+  outline-offset: 3px;
+}
+
+/* ---- motion: reserved space plus fade, never insert and push ---- */
+
+.fade { opacity: 0; transition: opacity var(--fade-quiet) ease; }
+.fade-quick { opacity: 0; transition: opacity var(--fade-quick) ease; }
+.fade.is-shown, .fade-quick.is-shown { opacity: 1; }
 
 @keyframes settle {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
 }
 
+/* ---- beats: wake, scent, visitor, night ---- */
+
+.beat-line {
+  margin: 0 0 14px;
+  animation: settle 900ms ease-out both;
+}
+
+.beat-self { color: var(--ink-warm); font-style: italic; }
+
+.beat button { margin-top: 18px; }
+
 .panel {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  margin-top: 8px;
 }
 
-.panel button {
-  margin: 0;
-  width: 100%;
-}
+.panel button { margin: 0; width: 100%; padding: 0 8px; }
 
+/* the panel and the narrator share one reserved slot, the swap is a
+   crossfade and the lines above never move */
 .visitor-slot {
   position: relative;
   margin-top: 8px;
-  /* tall enough for the narrator, the taller of the two, so the swap
-     never moves the lines above */
-  min-height: 190px;
+  min-height: 210px;
 }
 
-.visitor-slot .panel {
-  position: absolute;
-  inset: 0 0 auto 0;
-  margin: 0;
-}
+.visitor-slot .panel { position: absolute; inset: 0 0 auto 0; }
 
 .narrator {
   position: absolute;
   inset: 0 0 auto 0;
   padding-left: 14px;
-  border-left: 2px solid #4a4436;
+  border-left: 2px solid var(--line);
 }
 
-.narrator-meant,
-.narrator-heard {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 15px;
+.narrator-meant, .narrator-heard {
+  font-family: var(--mono);
+  font-size: var(--text-small);
   margin: 0 0 6px;
 }
 
-.narrator-meant { color: #cdb97a; }
-.narrator-heard { color: #9fb4c9; }
-
-.run-night { background: #0c0b0a; }
+.narrator-meant { color: var(--ink-warm); }
+.narrator-heard { color: var(--ink-cool); }
 
 .radio {
   margin: 8px 0 0;
   padding-left: 14px;
-  border-left: 2px solid #4a4436;
-  color: #cbc3b2;
+  border-left: 2px solid var(--line);
+  color: var(--ink-soft);
 }
 
-.radio p {
-  margin: 0 0 12px;
-  opacity: 0;
-  animation: settle 1200ms ease-out forwards;
-}
+.radio p { margin: 0 0 12px; opacity: 0; animation: settle 1200ms ease-out forwards; }
 
-/* the reveal: each thing appears alone, the photo appears here first */
-.reveal {
-  cursor: default;
-}
+/* ---- the reveal: fits one viewport by design ---- */
+
+.reveal { cursor: default; }
 
 .reveal-line {
-  margin: 0 0 22px;
-  /* reserved even when the line is invisible, so nothing below moves */
+  margin: 0 0 clamp(10px, 2vh, 22px);
   min-height: 1.55em;
 }
 
+/* the photo box is sized from the real ratio and capped by height so
+   photo plus lines plus the button fit a laptop and a phone. width
+   follows from the cap so a tall photo never overflows sideways. */
 .reveal-photo {
-  margin: 8px 0 22px;
-  /* the box is sized from the real photo ratio before the load, capped
-     by height, so its arrival never reflows the text */
-  width: 100%;
-  max-height: 60vh;
+  margin: 4px 0 clamp(10px, 2vh, 22px);
+  /* 50vh leaves room for the lines and the button on a tablet, where a
+     square photo at 55vh pushed the button just under the fold */
+  max-height: 50vh;
+  max-height: 50dvh;
+  max-width: 100%;
   border-radius: 3px;
   overflow: hidden;
-  transition: opacity 1400ms ease, filter 1400ms ease;
+  transition: opacity var(--fade-photo) ease, filter var(--fade-photo) ease;
   filter: saturate(0.4) blur(6px);
 }
 
-.reveal-photo.is-shown {
-  filter: none;
-}
+.reveal-photo.is-shown { filter: none; }
 
 .reveal-photo img {
   display: block;
@@ -226,83 +312,34 @@ button:hover {
   object-fit: cover;
 }
 
-
-.reveal-meet {
-  display: inline-block;
-  margin-top: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 15px;
-  letter-spacing: 0.06em;
-  color: #e8e2d5;
-  background: #2c2820;
-  border: 1px solid #6a624f;
-  border-radius: 4px;
-  padding: 12px 22px;
-  text-decoration: none;
-  animation: settle 1400ms ease-out both;
-}
-
-.reveal-meet:hover { background: #3a3428; }
-
-.error {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 14px;
-  color: #d98a7a;
-}
-
-/* reduced motion: appearing is instant, but every reserved space stays
-   exactly where it is, so reduced motion never reintroduces the jump */
-@media (prefers-reduced-motion: reduce) {
-  .beat-line, .radio p {
-    animation-duration: 1ms;
-  }
-  .fade, .fade-quick, .reveal-photo {
-    transition: none;
-  }
-}
-
-
-/* the end of the reveal: the button, then one quiet link under it */
+/* the ending: the primary, then one quiet link under it */
 .reveal-end {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 18px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 4px;
 }
 
-/* the reveal and the about panel share the page, only one is visible */
-.about-wrap {
-  min-height: 1px;
+.about-wrap { min-height: 1px; }
+
+/* ---- the reading frame: the listing as quoted shelter words ---- */
+
+.about {
+  max-width: var(--measure);
 }
 
-.reveal-about {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  color: #9a917d;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.reveal-about:hover { color: #cbc3b2; background: none; }
-
-/* the transparency panel: the listing as written, plainly laid out */
 .about h2 {
-  font-size: 20px;
+  font-size: var(--text);
   font-weight: 400;
   margin: 0 0 18px;
 }
 
 .about h3 {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 13px;
   letter-spacing: 0.08em;
-  color: #9a917d;
+  color: var(--ink-mute);
   font-weight: 400;
   margin: 26px 0 8px;
 }
@@ -312,45 +349,97 @@ button:hover {
   grid-template-columns: max-content 1fr;
   gap: 6px 18px;
   margin: 0;
-  font-size: 17px;
+  font-size: calc(var(--text) - 2px);
 }
 
 .about-facts dt {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 13px;
-  color: #9a917d;
+  color: var(--ink-mute);
   padding-top: 3px;
 }
 
-.about-facts dd { margin: 0; }
+.about-facts dd { margin: 0; overflow-wrap: anywhere; }
 
 .about-note {
-  font-size: 16px;
-  color: #b8ae9a;
+  font-size: calc(var(--text) - 2px);
+  color: var(--ink-soft);
   margin: 0 0 10px;
 }
 
 .about-quotes {
   margin: 0;
   padding-left: 18px;
-  font-size: 17px;
+  font-size: calc(var(--text) - 2px);
   font-style: italic;
-  color: #cbc3b2;
+  color: var(--ink-soft);
 }
 
 .about-quotes li { margin-bottom: 4px; }
 
-.about-description {
-  font-size: 16px;
-  color: #b8ae9a;
-  white-space: pre-line;
+/* the quoted frame: set apart from the reveal lines, readable measure,
+   comfortable leading, room between paragraphs, the source under it */
+.quoted {
+  margin: 0;
+  padding: 18px 20px;
+  border-left: 3px solid var(--line-strong);
+  background: rgba(255, 248, 234, 0.035);
+  border-radius: 0 3px 3px 0;
+  font-size: calc(var(--text) - 1px);
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.quoted p { margin: 0 0 1em; }
+.quoted p:last-child { margin-bottom: 0; }
+
+.quoted-source {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin: 10px 0 0;
 }
 
 .about-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 14px;
   margin-top: 26px;
 }
 
-.about-actions button { margin: 0; }
+.error {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--danger);
+}
+
+/* ---- short screens: a 720 tall laptop or a phone in landscape.
+   the photo is already small here, the stack of lines is what has to
+   give: tighter leading and gaps so the button stays above the fold ---- */
+
+@media (max-height: 760px) {
+  .run { padding-top: 12px; padding-bottom: 12px; }
+  .reveal { font-size: calc(var(--text) - 1px); line-height: 1.4; }
+  .reveal-line { margin-bottom: 8px; min-height: 1.4em; }
+  .reveal-photo { max-height: 40vh; max-height: 40dvh; margin-bottom: 8px; }
+  .reveal-end { margin-top: 0; gap: 4px; }
+}
+
+/* ---- small screens: 390px and up ---- */
+
+@media (max-width: 480px) {
+  .run { padding-top: 16px; padding-bottom: 16px; }
+  .panel { grid-template-columns: repeat(2, 1fr); }
+  .visitor-slot { min-height: 250px; }
+  .reveal-photo { max-height: 42vh; max-height: 42dvh; }
+  .about-facts { grid-template-columns: 1fr; gap: 2px 0; }
+  .about-facts dt { padding-top: 8px; }
+}
+
+/* ---- reduced motion: instant, but every reserved space stays ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .beat-line, .radio p { animation-duration: 1ms; }
+  .fade, .fade-quick, .reveal-photo, .run button, .run .btn { transition: none; }
+}
