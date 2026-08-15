@@ -23,3 +23,6 @@ description: Tone and emotional safety rules for all player facing content. Use 
 
 ## Voice
 Short sentences. Plain warm english. UI copy minimal. The reveal uses pauses, not exclamation points.
+
+## Emoji in listing text
+Fosters write with emoji and the record keeps them, exactly as written. Quoted facts and any player facing text derived from a description render through forDisplay in web/src/engine/display.ts, which strips emoji at the display layer only. Never strip at the data layer, never at curation, never before storing. The record keeps the truth, the screen keeps the style.
