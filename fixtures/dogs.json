@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "note": "Curated real adoptable dogs, 12 when complete. The two example-* entries below are synthetic, carry synthetic true, and exist only to show the shape. Search refuses synthetic entries so they can never reach a player. Every real entry needs: provider id, real listing_url, description_html copied verbatim from the listing, at least 200 chars of text after html strip or the pool filter drops it, photo cached under fixtures/photos/, org present in organizations, status ACTIVE at curation time, retrieved_at set to the curation moment, synthetic left out. Example photo files intentionally do not exist. After curation read each sanitized description once, stray angle brackets in listing text can swallow words.",
+  "organizations": [
+    {
+      "id": "example-org-1",
+      "name": "Example County Animal Shelter",
+      "city": "Springfield",
+      "state": "IL",
+      "url": "https://example.org/shelter"
+    },
+    {
+      "id": "example-org-2",
+      "name": "Example Rescue Alliance",
+      "city": "Riverton",
+      "state": "OH",
+      "url": "https://example.org/rescue"
+    }
+  ],
+  "dogs": [
+    {
+      "id": "example-1",
+      "name": "Biscuit",
+      "breed": "Labrador Retriever mix",
+      "age_group": "Adult",
+      "sex": "Female",
+      "size": "Large",
+      "description_html": "<p>Meet <b>Biscuit</b>! This three year old lab mix is the whole package.&nbsp;She loves tennis balls, belly rubs and long sniffy walks around the yard.</p><p>Biscuit is a bit shy on her first day but warms up fast once she trusts you. She walks nicely on leash, knows sit, and settles quietly at night. Staff say she greets every morning with a full body wag.</p>",
+      "photo_url": "https://example.org/photos/biscuit.jpg",
+      "photo_local": "fixtures/photos/example-1.jpg",
+      "listing_url": "https://example.org/adopt/biscuit",
+      "org_id": "example-org-1",
+      "status": "ACTIVE",
+      "retrieved_at": "2026-08-14T23:00:00Z",
+      "synthetic": true
+    },
+    {
+      "id": "example-2",
+      "name": "Pepper",
+      "breed": "Beagle mix",
+      "age_group": "Senior",
+      "sex": "Male",
+      "size": "Medium",
+      "description_html": "<p><b>Pepper</b> is a nine year old beagle mix with the softest ears in the building and a nose that has never met a smell it did not like.</p><ul><li>Housetrained and gentle</li><li>Happy to nap while you work</li><li>Walks slow, sniffs everything, wags at strangers</li></ul><p>Pepper came to us as a stray, so his story before the shelter is unknown. What we know for sure: he loves crunchy treats and sunny spots.</p>",
+      "photo_url": "https://example.org/photos/pepper.jpg",
+      "photo_local": "fixtures/photos/example-2.jpg",
+      "listing_url": "https://example.org/adopt/pepper",
+      "org_id": "example-org-2",
+      "status": "ACTIVE",
+      "retrieved_at": "2026-08-14T23:00:00Z",
+      "synthetic": true
+    }
+  ]
+}
