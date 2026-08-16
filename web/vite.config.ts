@@ -10,4 +10,10 @@ export default defineConfig({
       "/api": "http://localhost:8080",
     },
   },
+  test: {
+    // most tests are pure and need no dom. The ones that click a button
+    // ask for jsdom with a docblock, so the rest stay fast
+    environment: "node",
+    environmentMatchGlobs: [["**/*.dom.test.tsx", "jsdom"]],
+  },
 });

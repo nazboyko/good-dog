@@ -27,6 +27,7 @@ import (
 	"github.com/nazboyko/good-dog/internal/httpapi"
 	"github.com/nazboyko/good-dog/internal/radio"
 	"github.com/nazboyko/good-dog/internal/session"
+	"github.com/nazboyko/good-dog/internal/soundfx"
 )
 
 func main() {
@@ -83,12 +84,24 @@ func main() {
 		len(work), len(pool), len(work)-len(toRecord), len(toRecord), chars)
 	byVoice(work)
 
+	// the dog's own voice, from the sound endpoint rather than the
+	// speech one. Same cache, same rule: never at play time
+	every := soundfx.All()
+	var sounds []soundfx.Effect
+	for _, e := range every {
+		if _, ok := cache.Get(soundfx.Key(e)); !ok {
+			sounds = append(sounds, e)
+		}
+	}
+	fmt.Printf("%d vocalizations, %d already recorded, %d to record\n",
+		len(every), len(every)-len(sounds), len(sounds))
+
 	if *dry {
 		fmt.Println("dry run, nothing spent")
 		return
 	}
-	if len(toRecord) == 0 {
-		fmt.Println("every line is already on disk, nothing to do")
+	if len(toRecord) == 0 && len(sounds) == 0 {
+		fmt.Println("every line and every sound is already on disk, nothing to do")
 		return
 	}
 
@@ -105,11 +118,38 @@ func main() {
 		// the library is rate limited and this is not a race
 		time.Sleep(300 * time.Millisecond)
 	}
+	madeSounds := 0
+	for _, e := range sounds {
+		// sound generation is not billed per character, so this only
+		// bounds a runaway loop, it does not price the call
+		if err := budget.Allow(len(e.Prompt)); err != nil {
+			log.Printf("budget guard stopped %s: %v", e.Vocalization, err)
+			break
+		}
+		data, err := client.SoundEffect(ctx, e.Prompt, e.Seconds)
+		if err != nil {
+			log.Printf("could not record %s: %v", e.Vocalization, err)
+			continue
+		}
+		if _, err := cache.Put(soundfx.Key(e), data); err != nil {
+			log.Printf("could not cache %s: %v", e.Vocalization, err)
+			continue
+		}
+		madeSounds++
+		fmt.Printf("  %-13s %6d bytes\n", e.Vocalization, len(data))
+		time.Sleep(300 * time.Millisecond)
+	}
 	after := remaining(ctx, client)
 
 	fmt.Printf("recorded %d of %d lines, %d characters submitted\n", done, len(toRecord), chars)
+	fmt.Printf("recorded %d of %d vocalizations\n", madeSounds, len(sounds))
 	if before > 0 && after > 0 {
 		fmt.Printf("credits: %d consumed, %d remaining of the month\n", before-after, after)
+	}
+	// a run that recorded nothing it set out to record has not succeeded,
+	// and a silent cache that exits zero ships as silence nobody noticed
+	if done < len(toRecord) || madeSounds < len(sounds) {
+		log.Fatalf("recorded %d of %d lines and %d of %d sounds", done, len(toRecord), madeSounds, len(sounds))
 	}
 }
 

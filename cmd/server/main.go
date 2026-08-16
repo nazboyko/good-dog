@@ -18,6 +18,7 @@ import (
 	"github.com/nazboyko/good-dog/internal/httpapi"
 	"github.com/nazboyko/good-dog/internal/radio"
 	"github.com/nazboyko/good-dog/internal/session"
+	"github.com/nazboyko/good-dog/internal/soundfx"
 	"github.com/nazboyko/good-dog/internal/webui"
 )
 
@@ -133,10 +134,23 @@ func main() {
 		log.Print("radio: no speech key, tonight is text only")
 	}
 
+	// The dog's own voice. Like the radio, boot checks and never records:
+	// bark() swallows a failed sound on purpose, so a press that makes no
+	// noise is invisible to the player and this log is the only place it
+	// can show up as a bug.
+	if quiet := soundfx.Missing(ttsCache); len(quiet) > 0 {
+		log.Printf("voice: %d of %d vocalizations have no recording, run `make voices`: %v",
+			len(quiet), len(soundfx.All()), quiet)
+	} else {
+		log.Printf("voice: all %d vocalizations are recorded", len(soundfx.All()))
+	}
+
 	mux := http.NewServeMux()
 	sessions.Register(mux)
 	mux.HandleFunc("GET /events", httpapi.Events(sessions))
-	mux.HandleFunc("GET /api/audio/{file}", httpapi.Audio("assets/audio", ttsCacheDir))
+	audio := httpapi.Audio("assets/audio", ttsCacheDir)
+	mux.HandleFunc("GET /api/audio/{file}", audio)
+	mux.HandleFunc("GET /api/sound/{name}", httpapi.Sound(audio))
 	mux.HandleFunc("GET /api/spike/gemini", httpapi.SpikeGemini(geminiClient))
 	mux.HandleFunc("GET /api/spike/tts", httpapi.SpikeTTS(elevenClient, ttsCache, &elevenlabs.Budget{}))
 	mux.HandleFunc("GET /api/spike/subscription", httpapi.SpikeSubscription(elevenClient))

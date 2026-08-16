@@ -34,6 +34,15 @@ const (
 
 var vocalizations = []Vocalization{PlayfulBark, AlertBark, Whine, LowGrowl, Howl, Silence}
 
+// Vocalizations is every sound the player can choose. Exported so the
+// packages that have to cover all of them, like the recordings, can
+// check against this list rather than against a copy of it that drifts.
+func Vocalizations() []Vocalization {
+	out := make([]Vocalization, len(vocalizations))
+	copy(out, vocalizations)
+	return out
+}
+
 func ValidVocalization(v Vocalization) bool {
 	for _, known := range vocalizations {
 		if known == v {

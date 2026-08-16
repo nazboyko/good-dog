@@ -10,6 +10,7 @@ import {
   transitionTimes,
   vocalize,
 } from "../engine/run";
+import { bark, hush } from "../engine/voice";
 import { SceneBackdrop } from "./Scene";
 import { Night, Scent, Visitor, Wake } from "./Beats";
 import { Reveal } from "./Reveal";
@@ -84,6 +85,9 @@ export function Run() {
       return;
     }
     setPhase("dark");
+    // nothing the dog said carries into the next screen, and the last
+    // screen is the reveal
+    hush();
     await wait(t.dark);
     setView(next.value);
     window.scrollTo(0, 0);
@@ -95,6 +99,9 @@ export function Run() {
   // just the panel to narrator crossfade the screen already does
   const signal = async (v: Vocalization) => {
     if (busy || !view) return;
+    // the sound goes with the press, ahead of the round trip and ahead
+    // of the answer: you hear what you did, then you read how it landed
+    bark(v);
     setBusy(true);
     setError(null);
     try {

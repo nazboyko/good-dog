@@ -1,0 +1,25 @@
+{
+  "session_id": "508fb44009fc3c67",
+  "day": 1,
+  "beat": "visitor",
+  "name": "Bella",
+  "age_group": "Senior",
+  "breed": "Mountain Cur / American Staffordshire Terrier",
+  "visitor": {
+    "arrival": [
+      "A woman stops at your gate with her coat still buttoned.",
+      "She has walked this row twice already."
+    ],
+    "options": [
+      "playful_bark",
+      "alert_bark",
+      "whine",
+      "low_growl",
+      "howl",
+      "silence"
+    ],
+    "heard_label": "she heard",
+    "exchange": 1,
+    "exchanges": 4
+  }
+}

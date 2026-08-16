@@ -69,6 +69,57 @@ func (c *Client) Synthesize(ctx context.Context, text, voiceID string, settings 
 	return data, nil
 }
 
+// The fixed inputs to every sound call. Influence sits high because
+// these are a few specific noises, not an invitation to be creative: a
+// model given room here returns a pack of dogs in a field.
+const (
+	soundInfluence = 0.7
+	soundFormat    = "mp3_44100_128"
+)
+
+// SoundSettings names every fixed input to SoundEffect, so a cache key
+// built from it moves when the sound would. Without this the influence
+// could be retuned and every caller would keep serving the old
+// recordings, with a warm cache reporting nothing to do.
+func SoundSettings() string {
+	return fmt.Sprintf("influence=%.2f/%s", soundInfluence, soundFormat)
+}
+
+// SoundEffect turns a description into mp3 bytes. Same account and the
+// same meter as speech, a different endpoint: this one has no voice
+// because nobody is talking.
+func (c *Client) SoundEffect(ctx context.Context, prompt string, seconds float64) ([]byte, error) {
+	body, err := json.Marshal(map[string]any{
+		"text":             prompt,
+		"duration_seconds": seconds,
+		"prompt_influence": soundInfluence,
+	})
+	if err != nil {
+		return nil, err
+	}
+	url := c.baseURL + "/v1/sound-generation?output_format=" + soundFormat
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("xi-api-key", c.apiKey)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(res.Body, 20<<20))
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("elevenlabs status %d: %.200s", res.StatusCode, data)
+	}
+	return data, nil
+}
+
 // Subscription is the slice of the user subscription endpoint the
 // budget report needs: characters used and the plan's cap.
 type Subscription struct {
