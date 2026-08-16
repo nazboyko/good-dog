@@ -4,14 +4,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      # a red step is a red run, the day zero "no module yet" guards are gone
-      - run: go vet ./...
-      - run: go test -race ./...
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+
+      # The frontend first, in the same order the Dockerfile builds. The
+      # server embeds web/dist with go:embed, so until it exists the Go
+      # build has nothing to embed and fails before it tests anything.
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -22,3 +20,16 @@ jobs:
         working-directory: web
       - run: npm test -- --run
         working-directory: web
+      - run: npm run build
+        working-directory: web
+      - run: cp -r web/dist internal/webui/dist
+
+      # go.mod is the one place the toolchain is declared. The Dockerfile
+      # has to agree with it and make toolchain-check proves that it does.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: make toolchain-check
+      # a red step is a red run, the day zero "no module yet" guards are gone
+      - run: go vet ./...
+      - run: go test -race ./...
