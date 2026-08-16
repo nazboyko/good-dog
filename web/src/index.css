@@ -182,6 +182,32 @@ html, body { overflow-x: hidden; }
   background: var(--raised-hover);
 }
 
+/* ---- unavailable ----
+
+   A button that ignores a click reads as broken. While the radio is
+   still talking the sleep button is genuinely unavailable, and it has
+   to look it: dimmed, no hover, no pointer. The label says why, so the
+   player knows they are waiting on the night rather than on a bug. */
+.run button:disabled,
+.run button:disabled:hover {
+  background: transparent;
+  color: var(--ink-mute);
+  border-color: var(--line);
+  border-style: dashed;
+  cursor: default;
+}
+
+/* the answer buttons stop taking clicks for the moment the answer is in
+   flight and then fade out anyway. Dressing that half second as
+   unavailable reads as a fault, so they keep their own look. */
+.run .panel button:disabled,
+.run .panel button:disabled:hover {
+  background: var(--raised);
+  color: var(--ink);
+  border-color: var(--line);
+  border-style: solid;
+}
+
 /* primary: the one loud thing on a screen. light ground, dark text,
    small caps in the same family. at most one per screen. */
 .run .btn-primary {

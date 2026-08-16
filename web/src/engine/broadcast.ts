@@ -1,9 +1,14 @@
-// The night radio, client side. The server paces the broadcast and this
-// only plays what arrives, which is the whole reason the schedule lives
-// over there: a backgrounded tab throttles timers, and a night driven
-// from the browser would drift out of step with itself.
+// The night radio, client side.
 //
-// The stream is the radio. This is the plan for when there is no radio.
+// Two clocks, and they are not the same one. The server decides when a
+// cue is handed over, on offsets tuned for reading: that schedule lives
+// over there because a backgrounded tab throttles timers. The queue here
+// decides when a cue is heard, and a spoken line takes as long as it
+// takes. A line that has no voice falls back to the server's reading
+// pace, so a night with the sound off is the night it always was.
+//
+// The stream is the radio. listen() is the plan for when there is no
+// radio, and queue() is what stops three dogs talking at once.
 
 export type RadioCue = {
   at_ms: number;
@@ -13,20 +18,61 @@ export type RadioCue = {
   audio?: string;
 };
 
-// play starts a cue's recording if it has one. It never blocks the night
-// and it never reports failure upward, because the subtitle is the night
-// and the voice is on top of it: a browser that refuses to autoplay, a
-// muted tab, a missing file and a judge watching with the sound off all
-// have to land in exactly the same place, which is a night that reads.
-export function play(cue: RadioCue, make: (src: string) => HTMLAudioElement = (src) => new Audio(src)): void {
-  if (!cue.audio) return;
-  try {
-    const sound = make(cue.audio);
-    // a promise rejection here is the autoplay policy, not an error
-    void sound.play?.()?.catch?.(() => {});
-  } catch {
-    // no Audio in this environment, the line still shows
-  }
+// What became of a line's recording. "finished" means it played to the
+// end and the next line can follow it. "blocked" means no sound reached
+// the room, whether that was the autoplay policy, a missing file or a
+// browser with no Audio at all, and the night falls back to reading pace.
+export type Played = "finished" | "blocked";
+
+// The silence between two speakers on the radio. Long enough to hear the
+// handover, short enough that the night does not sag.
+export const BEAT_MS = 700;
+
+// Nothing on this radio is half a minute long. If a recording stalls
+// without ever ending or erroring, the night stops waiting on it: one
+// silent gap is survivable, a night that never reaches sleep is not.
+export const STALLED_MS = 30000;
+
+// play starts a cue's recording and resolves when the room is quiet
+// again. It never rejects and it never reports an error upward, because
+// the subtitle is the night and the voice is on top of it: a browser
+// that refuses to autoplay, a missing file and a judge watching with the
+// sound off all have to land in the same place, which is a night that
+// reads.
+export function play(
+  cue: RadioCue,
+  make: (src: string) => HTMLAudioElement = (src) => new Audio(src),
+  // hands the element back so a night that is being torn down can stop
+  // the sound it already started
+  onSound?: (sound: HTMLAudioElement) => void,
+): Promise<Played> {
+  if (!cue.audio) return Promise.resolve("blocked");
+  return new Promise<Played>((resolve) => {
+    let settled = false;
+    let stall: ReturnType<typeof setTimeout>;
+    const done = (how: Played) => {
+      if (settled) return;
+      settled = true;
+      // without this the element stays reachable from a pending timer
+      // for half a minute after it has finished, once per line
+      clearTimeout(stall);
+      resolve(how);
+    };
+    let sound: HTMLAudioElement;
+    try {
+      sound = make(cue.audio!);
+    } catch {
+      done("blocked");
+      return;
+    }
+    onSound?.(sound);
+    sound.addEventListener?.("ended", () => done("finished"));
+    sound.addEventListener?.("error", () => done("blocked"));
+    // a rejection here is the autoplay policy, not an error
+    const started = sound.play?.();
+    if (started?.catch) started.catch(() => done("blocked"));
+    stall = setTimeout(() => done("finished"), STALLED_MS);
+  });
 }
 
 // How many of the neighbours' lines stay on screen at once.
@@ -53,6 +99,101 @@ export function visibleCues(cues: RadioCue[], heard: number): number[] {
   return out;
 }
 
+// readingGap is how long a line with no voice stays up: the distance to
+// the next cue on the server's schedule, which is the pace the whole
+// night ran at before any of it was recorded. Keeping it means the
+// muted and audio blocked nights are the nights they always were.
+function readingGap(cues: RadioCue[], index: number): number {
+  const next = cues[index + 1];
+  if (!next) return BEAT_MS;
+  return Math.max(0, next.at_ms - cues[index].at_ms);
+}
+
+export type QueueHandlers = {
+  // put the line on screen. Called before its sound starts, so the night
+  // reads the same whether or not the sound arrives
+  onCue: (index: number) => void;
+  // the last line has finished and the room is quiet
+  onDone: () => void;
+};
+
+export type Queue = {
+  // a cue is ready to be heard. Out of order and repeat arrivals are
+  // dropped, so a reconnect that replays the night cannot double it
+  arrive: (index: number) => void;
+  // nothing more is coming. The night ends once the queue drains
+  noMore: () => void;
+  stop: () => void;
+};
+
+// queue plays the night one line at a time.
+//
+// The offsets the server sends on are tuned for reading, and a spoken
+// line runs longer than its slot, so pacing playback by them puts three
+// dogs on the air at once. Arrivals buffer here instead and each line
+// waits for the one before it to finish. The night gets as long as it
+// needs to be.
+export function queue(
+  cues: RadioCue[],
+  handlers: QueueHandlers,
+  deps: {
+    playCue?: (cue: RadioCue) => Promise<Played>;
+    wait?: (ms: number) => Promise<void>;
+  } = {},
+): Queue {
+  let sounding: HTMLAudioElement | null = null;
+  const playCue = deps.playCue ?? ((cue: RadioCue) => play(cue, undefined, (s) => (sounding = s)));
+  const wait = deps.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+
+  const waiting: number[] = [];
+  let highest = -1;
+  let draining = false;
+  let sealed = false;
+  let stopped = false;
+  let finished = false;
+
+  const drain = async () => {
+    if (draining) return;
+    draining = true;
+    while (waiting.length > 0 && !stopped) {
+      const index = waiting.shift()!;
+      handlers.onCue(index);
+      // the sound has to be over before the next line starts, which is
+      // the whole point: only one radio line is ever audible
+      const how = await playCue(cues[index]);
+      await wait(how === "finished" ? BEAT_MS : readingGap(cues, index));
+    }
+    draining = false;
+    // sealed is what keeps sleep locked: the night is over when the last
+    // line has been heard, not when the server stopped sending
+    if (sealed && !stopped && !finished) {
+      finished = true;
+      handlers.onDone();
+    }
+  };
+
+  return {
+    arrive(index) {
+      if (stopped || index <= highest) return;
+      highest = index;
+      waiting.push(index);
+      void drain();
+    },
+    noMore() {
+      sealed = true;
+      void drain();
+    },
+    stop() {
+      stopped = true;
+      // two nights running at once is what StrictMode's second mount
+      // would otherwise give, and only one of them can be silenced by
+      // dropping the queue
+      sounding?.pause?.();
+      sounding = null;
+    },
+  };
+}
+
 // How long to wait for the stream to say anything before deciding it is
 // not going to. The server sends hello the instant it accepts the
 // connection, so silence past this is a real failure, not slowness.
@@ -60,7 +201,9 @@ export const STREAM_GRACE_MS = 2500;
 
 export type BroadcastHandlers = {
   onCue: (index: number) => void;
-  onDone: () => void;
+  // every cue has been handed over. Not the end of the night: the last
+  // one still has to be heard, and that is the queue's to decide
+  onAllSent: () => void;
   // called when the stream never spoke and the night ran on its own
   onFallback?: () => void;
 };
@@ -110,7 +253,7 @@ export function listen(
       timers.push(setTimeout(() => play(from + i), Math.max(0, cue.at_ms - base)));
     });
     const last = cues.length ? cues[cues.length - 1].at_ms - base : 0;
-    timers.push(setTimeout(() => handlers.onDone(), Math.max(0, last) + 400));
+    timers.push(setTimeout(() => handlers.onAllSent(), Math.max(0, last) + 400));
   };
 
   const grace = setTimeout(runLocally, STREAM_GRACE_MS);
@@ -141,7 +284,7 @@ export function listen(
     }
   });
   source.addEventListener("radio_done", () => {
-    if (!usingFallback) handlers.onDone();
+    if (!usingFallback) handlers.onAllSent();
   });
   source.addEventListener("error", () => {
     // EventSource retries by itself, so an error only matters while

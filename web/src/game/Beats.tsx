@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { View, Vocalization } from "../engine/run";
 import { VOCALIZATION_LABELS, closeStagger, prefersReducedMotion } from "../engine/run";
-import { listen, play, visibleCues } from "../engine/broadcast";
+import { listen, queue, visibleCues } from "../engine/broadcast";
 import { forDisplay } from "../engine/display";
 
 // One small component per beat. Presentation only: the engine decides
@@ -163,17 +163,24 @@ export function Night({ view, onNext, busy }: { view: View; onNext: () => void; 
     }
     setHeard(0);
     setOver(false);
-    return listen(view.session_id, cues, {
-      // cues arrive in order and never twice, so the count is the
+    // Arrivals and playback are two different clocks. The stream hands
+    // cues over on offsets tuned for reading, the queue holds each one
+    // until its voice has finished, and the night is over when the
+    // queue says so, not when the last cue was handed over.
+    const playing = queue(cues, {
+      // cues drain in order and never twice, so the count is the
       // highest index heard plus one
-      onCue: (i) => {
-        // the line goes up first, then the voice on top of it, so the
-        // night reads the same with the sound off
-        setHeard((n) => Math.max(n, i + 1));
-        play(cues[i]);
-      },
+      onCue: (i) => setHeard((n) => Math.max(n, i + 1)),
       onDone: () => setOver(true),
     });
+    const stop = listen(view.session_id, cues, {
+      onCue: (i) => playing.arrive(i),
+      onAllSent: () => playing.noMore(),
+    });
+    return () => {
+      playing.stop();
+      stop();
+    };
     // the broadcast belongs to this session's night, nothing else restarts it
   }, [view.session_id, cues.length]);
 
@@ -191,11 +198,13 @@ export function Night({ view, onNext, busy }: { view: View; onNext: () => void; 
           </p>
         ))}
       </blockquote>
-      {/* the button is locked while the broadcast runs, so it says why
-          rather than sitting there dead. No count and no bar: a night
-          that tells you how much is left is a night you are waiting
-          out rather than listening to. */}
-      <button onClick={onNext} disabled={busy || !over}>
+      {/* Disabled for real while the broadcast runs, so it reads as
+          unavailable rather than as a button that ignores you, and the
+          label says why. It is announced when it opens, because a
+          screen reader cannot see the radio go quiet. No count and no
+          bar: a night that tells you how much is left is a night you
+          are waiting out rather than listening to. */}
+      <button onClick={onNext} disabled={busy || !over} aria-live="polite">
         {over ? (view.night?.onward ?? "sleep") : (view.night?.holding ?? "the radio is still on")}
       </button>
     </section>

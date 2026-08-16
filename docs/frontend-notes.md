@@ -16,6 +16,8 @@ Two buttons, one job each. Both are the same serif as the text, both at least 44
 
 Never mix fonts on a button, never let a primary go lowercase, never put two primaries on one screen.
 
+**Unavailable** is the fourth state, not a fourth button: any `button:disabled` inside the run loses its ground, drops to `--ink-mute`, goes dashed and stops showing a pointer. A control that takes a click and does nothing reads as a fault, so a genuinely unavailable one has to look it, and its label says why rather than sitting there dead. The sleep button during the broadcast is the case this exists for. The one exception is the vocalization panel: those buttons stop taking clicks for the moment an answer is in flight and then fade out anyway, and dressing that half second as unavailable reads as a fault of its own, so they keep the quiet look.
+
 ## The reading frame
 
 Anything quoted from a listing at length goes in `.quoted`: a measure around 65ch, line height 1.7, a paragraph gap of one line, a left rule and a faint ground so it reads as the shelter's words and not the game's, and a `.quoted-source` line under it naming the org, city and state. The sanitizer keeps each block of the listing on its own line, so paragraphs come from splitting the description on newlines and every `<p>` inside the frame is one real paragraph as the shelter wrote it.
