@@ -355,6 +355,40 @@ html, body { overflow-x: hidden; }
    close will need reads as breathing room and not as a hole */
 .visitor-slot .panel { align-self: center; }
 
+/* ---- the night: a broadcast, not a transcript ---- */
+
+/* The window is reserved so the lines rolling through it do not move
+   the screen every two seconds. Sized for the ending, which is the
+   tallest the night gets: the player's own segment plus the closer,
+   measured at 363 desktop and 440 at 390px against the longest own
+   story any of the twelve dogs can produce. Lines sit at the bottom of
+   the box, so the room above them is dark rather than empty. */
+.radio {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 380px;
+  margin: 0;
+}
+
+/* the rail marks the lines that are on air, not the reserved dark
+   above them: drawn on each line so it grows with the window instead
+   of hanging down the whole box */
+.radio-line {
+  animation: settle 900ms ease-out both;
+  border-left: 2px solid var(--line);
+  padding-left: 14px;
+  margin-left: -14px;
+}
+
+/* the host frames the night, the dogs are the night */
+.radio-ranger { color: var(--ink-mute); }
+.radio-own { color: var(--ink); }
+
+@media (max-width: 480px) {
+  .radio { min-height: 460px; }
+}
+
 /* ---- the visit as a conversation ---- */
 
 /* The arrival sets the scene and then stops being the event. Once the
@@ -420,13 +454,11 @@ html, body { overflow-x: hidden; }
 .narrator-heard { color: var(--ink-cool); }
 
 .radio {
-  margin: 8px 0 0;
   padding-left: 14px;
-  border-left: 2px solid var(--line);
   color: var(--ink-soft);
 }
 
-.radio p { margin: 0 0 12px; opacity: 0; animation: settle 1200ms ease-out forwards; }
+.radio p { margin: 0 0 12px; }
 
 /* ---- the reveal: fits one viewport by design ---- */
 

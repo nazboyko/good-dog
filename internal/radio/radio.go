@@ -27,8 +27,12 @@ type Speaker string
 const (
 	// SpeakerRanger is the host, the only invented voice in the game
 	SpeakerRanger Speaker = "ranger"
-	// SpeakerStory is a line about a real dog
+	// SpeakerStory is a line about a real dog in another kennel
 	SpeakerStory Speaker = "story"
+	// SpeakerOwn is a line about the dog the player has been all day.
+	// The night ends on these, so they stay on screen while the
+	// neighbours' lines roll past above them.
+	SpeakerOwn Speaker = "own"
 )
 
 // Cue is one line and when it lands, measured from the start of the
@@ -133,7 +137,7 @@ func Broadcast(neighbours []Neighbour, own []string) []Cue {
 		// gap does the handoff better than a third announcement would
 		at += beforeUp - betweenL
 		for _, line := range own {
-			add(SpeakerStory, line)
+			add(SpeakerOwn, line)
 		}
 	}
 

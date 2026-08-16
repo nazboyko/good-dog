@@ -48,6 +48,18 @@ When the reserved block is much taller than the panel that shares it, the panel 
 
 Re-measure whenever the copy changes, in both directions, and whenever the composition changes at all. Rewriting the close shortened the 320px worst case from 399 to 369, which retired a whole extra media query. Showing the exchanges already past took it to 481, which put it back. A floor nobody rechecks only ever grows.
 
+## A stream is heard, a list is read
+
+The night radio accumulated all sixteen of its lines and the player stopped listening and started reading: a broadcast became a transcript to get through. Three lines stay on screen and the rest roll past, so the screen holds what is being said rather than everything that has been said.
+
+Two kinds of line never roll away. The player's own dog, and the last line of the night. The night ends on those, and an ending you have to scroll back for is not an ending. The broadcast marks its own lines with a speaker of `own`, so the client is not guessing which segment matters.
+
+Reserve the window for its ending. The tallest the night gets is the own segment plus the closer, measured at 363 desktop and 440 at 390px, so the box is 380 and 460 and never resizes while lines roll through it. Lines sit at the bottom with `justify-content: flex-end`, so the space above them is dark rather than empty, which is what a dark room should look like anyway.
+
+Decoration belongs to the content, not to the reserved space. The rail was on the block, so it drew a two pixel line down 460px of empty dark and read as an artifact. It is on each line now and grows with the window.
+
+Every line is still a subtitle for as long as it is up. Rolling a line away is a presentation choice about attention, never a reason a muted player misses something: they see exactly what a hearing player sees, just not all of it at once.
+
 ## A repeated beat needs a changing composition
 
 Four exchanges of a visitor scene read as one frame reprinted, because the scene-setting lines were the largest thing on screen and stayed at full weight while the only thing that changed was the smallest. The fix was composition, not flow. Three rules came out of it and they apply to any beat that repeats.

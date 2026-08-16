@@ -358,3 +358,51 @@ func TestTheNightSpreadsAcrossSheltersWhenItCan(t *testing.T) {
 		t.Errorf("a single shelter pool must still fill %d slots, got %d", Stories, len(got))
 	}
 }
+
+// The night has to feel heard rather than read, so the client rolls a
+// window over the neighbours' lines. That only works if the broadcast
+// says which lines are the player's own: those stay, because the night
+// ends on them.
+func TestTheOwnSegmentIsMarkedSoItCanStay(t *testing.T) {
+	own := []string{"Her name is Venus.", "She is real, and she is still here."}
+	cues := Broadcast(testPool(), own)
+
+	var ownCues, neighbourCues int
+	for _, c := range cues {
+		switch c.Speaker {
+		case SpeakerOwn:
+			ownCues++
+			if !contains(own, c.Line) {
+				t.Errorf("a line that is not the player's own is marked own: %s", c.Line)
+			}
+		case SpeakerStory:
+			neighbourCues++
+			if contains(own, c.Line) {
+				t.Errorf("the player's own line is marked as a neighbour: %s", c.Line)
+			}
+		}
+	}
+	if ownCues != len(own) {
+		t.Errorf("marked %d own lines, want %d", ownCues, len(own))
+	}
+	if neighbourCues == 0 {
+		t.Error("the neighbours are the lines that roll past, there must be some")
+	}
+	// the own segment is unbroken and last: nothing of anybody else's
+	// arrives after the player's dog starts
+	firstOwn := -1
+	for i, c := range cues {
+		if c.Speaker == SpeakerOwn && firstOwn < 0 {
+			firstOwn = i
+		}
+		if firstOwn >= 0 && c.Speaker == SpeakerStory {
+			t.Errorf("a neighbour line arrives after the own segment starts: %s", c.Line)
+		}
+	}
+	// and a night with no own segment marks nothing own
+	for _, c := range Broadcast(testPool(), nil) {
+		if c.Speaker == SpeakerOwn {
+			t.Errorf("no own story was given, yet a line is marked own: %s", c.Line)
+		}
+	}
+}

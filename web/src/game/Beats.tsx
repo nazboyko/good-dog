@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { View, Vocalization } from "../engine/run";
 import { VOCALIZATION_LABELS, closeStagger, prefersReducedMotion } from "../engine/run";
-import { listen, play } from "../engine/broadcast";
+import { listen, play, visibleCues } from "../engine/broadcast";
 import { forDisplay } from "../engine/display";
 
 // One small component per beat. Presentation only: the engine decides
@@ -180,10 +180,14 @@ export function Night({ view, onNext, busy }: { view: View; onNext: () => void; 
   return (
     <section className="beat beat-night">
       <p className="beat-line">Lights out. Somewhere down the hall, a radio.</p>
-      <blockquote className="radio">
-        {cues.slice(0, heard).map((cue, i) => (
-          <p key={i} className={`radio-${cue.speaker}`}>
-            {forDisplay(cue.line)}
+      {/* a moving window, not a transcript. Sixteen lines accumulating
+          turns a broadcast into a document the player reads instead of
+          hears. The player's own dog and the closing line stay, because
+          the night ends on them. */}
+      <blockquote className="radio" aria-live="polite">
+        {visibleCues(cues, heard).map((i) => (
+          <p key={i} className={`radio-line radio-${cues[i].speaker}`}>
+            {forDisplay(cues[i].line)}
           </p>
         ))}
       </blockquote>

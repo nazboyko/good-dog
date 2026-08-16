@@ -7,7 +7,7 @@
 
 export type RadioCue = {
   at_ms: number;
-  speaker: "ranger" | "story";
+  speaker: "ranger" | "story" | "own";
   line: string;
   // the recording of this line, absent when there is none
   audio?: string;
@@ -27,6 +27,30 @@ export function play(cue: RadioCue, make: (src: string) => HTMLAudioElement = (s
   } catch {
     // no Audio in this environment, the line still shows
   }
+}
+
+// How many of the neighbours' lines stay on screen at once.
+//
+// Sixteen lines accumulating turns a broadcast into a transcript: the
+// player stops listening and starts reading, and the night becomes a
+// document to get through. A short window rolls instead, so the screen
+// holds what is being said rather than everything that has been said.
+export const WINDOW = 3;
+
+// visibleCues is which lines are on screen once heard of them have
+// arrived, oldest first.
+//
+// The player's own dog and the last line of the night are never rolled
+// away. The night ends on them, and an ending you have to scroll back
+// for is not an ending. Everything else is a window.
+export function visibleCues(cues: RadioCue[], heard: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < Math.min(heard, cues.length); i++) {
+    const isLast = i === cues.length - 1;
+    const stays = cues[i].speaker === "own" || isLast;
+    if (stays || i >= heard - WINDOW) out.push(i);
+  }
+  return out;
 }
 
 // How long to wait for the stream to say anything before deciding it is
