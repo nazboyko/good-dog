@@ -11,6 +11,7 @@ import {
   vocalize,
 } from "../engine/run";
 import { bark, hush } from "../engine/voice";
+import { prime } from "../engine/speaker";
 import { SceneBackdrop } from "./Scene";
 import { Night, Scent, Visitor, Wake } from "./Beats";
 import { Reveal } from "./Reveal";
@@ -76,6 +77,14 @@ export function Run() {
   // transition: fade out while the next view loads, hold dark, swap, fade in
   const transition = async (work: () => Promise<View>) => {
     if (busy) return;
+    // The speakers for the radio are made and touched here, in the tap,
+    // before the first await. iOS only lets an audio element start if
+    // that element was touched inside a gesture, and the night's cues
+    // arrive seconds later from the stream, so nothing they create could
+    // ever pass. Every screen change primes, not just the one into the
+    // night: it is cheap, it cannot know which tap is the last one
+    // before the radio, and a primed speaker stays primed.
+    prime();
     setBusy(true);
     setError(null);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

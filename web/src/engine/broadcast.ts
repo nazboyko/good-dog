@@ -10,6 +10,8 @@
 // The stream is the radio. listen() is the plan for when there is no
 // radio, and queue() is what stops three dogs talking at once.
 
+import { classify, note, take, type Refusal } from "./speaker";
+
 export type RadioCue = {
   at_ms: number;
   speaker: "ranger" | "story" | "own";
@@ -41,7 +43,14 @@ export const STALLED_MS = 30000;
 // reads.
 export function play(
   cue: RadioCue,
-  make: (src: string) => HTMLAudioElement = (src) => new Audio(src),
+  // the speaker to play through. The default takes one primed inside
+  // the tap that started the night, which is what iOS requires: an
+  // element that has never been touched in a gesture cannot start
+  make: (src: string) => HTMLAudioElement = (src) => {
+    const el = take();
+    el.src = src;
+    return el;
+  },
   // hands the element back so a night that is being torn down can stop
   // the sound it already started
   onSound?: (sound: HTMLAudioElement) => void,
@@ -50,28 +59,33 @@ export function play(
   return new Promise<Played>((resolve) => {
     let settled = false;
     let stall: ReturnType<typeof setTimeout>;
-    const done = (how: Played) => {
+    let sound: HTMLAudioElement | null = null;
+    const done = (how: Played, why?: Refusal, detail?: string) => {
       if (settled) return;
       settled = true;
       // without this the element stays reachable from a pending timer
       // for half a minute after it has finished, once per line
       clearTimeout(stall);
+      // a line that made no sound is counted and said out loud, so a
+      // silent night on a phone is a console line and not a mystery
+      if (how === "finished" && why === undefined) note("played");
+      else if (why) note(why, detail);
       resolve(how);
     };
-    let sound: HTMLAudioElement;
     try {
       sound = make(cue.audio!);
-    } catch {
-      done("blocked");
+    } catch (e) {
+      done("blocked", "unknown", String(e));
       return;
     }
     onSound?.(sound);
     sound.addEventListener?.("ended", () => done("finished"));
-    sound.addEventListener?.("error", () => done("blocked"));
-    // a rejection here is the autoplay policy, not an error
+    sound.addEventListener?.("error", () => done("blocked", classify(null, sound), cue.audio));
+    // a rejection here is usually the autoplay policy, and its name says
+    // so: NotAllowedError is iOS refusing, anything else is the file
     const started = sound.play?.();
-    if (started?.catch) started.catch(() => done("blocked"));
-    stall = setTimeout(() => done("finished"), STALLED_MS);
+    if (started?.catch) started.catch((e: unknown) => done("blocked", classify(e, sound), cue.audio));
+    stall = setTimeout(() => done("finished", "unknown", "stalled " + cue.audio), STALLED_MS);
   });
 }
 

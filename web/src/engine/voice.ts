@@ -9,6 +9,7 @@
 // missing file.
 
 import type { Vocalization } from "./run";
+import { classify, note } from "./speaker";
 
 // Anything that never makes a sound. Silence is the real one; the rest
 // of the list is empty on purpose, so adding a vocalization without a
@@ -39,11 +40,18 @@ export function bark(
   hush();
   if (wordless.includes(v)) return;
   try {
+    // this runs inside the tap itself, so a fresh element is allowed to
+    // play on iOS: the gesture is live and the element is touched in it.
+    // That is the difference between this and the radio, whose cues
+    // arrive seconds after any tap and have to go through primed speakers
     const sound = make(`/api/sound/${v}`);
     sounding = sound;
-    // a rejection here is the autoplay policy, not an error
-    void sound.play?.()?.catch?.(() => {});
-  } catch {
-    // no Audio in this environment, the press still counts
+    const started = sound.play?.();
+    // a refusal here still cannot block the press, but it is not swallowed
+    // either: it is counted with the radio's, so the console says which
+    // sounds a phone let through and which it did not
+    if (started?.catch) started.catch((e: unknown) => note(classify(e, sound), `own voice ${v}`));
+  } catch (e) {
+    note("unknown", `own voice ${v}: ${String(e)}`);
   }
 }
