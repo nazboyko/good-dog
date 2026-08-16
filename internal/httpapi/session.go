@@ -65,7 +65,7 @@ func (h *Sessions) rebuild(ctx context.Context, row session.Row) (*session.Sessi
 	if err != nil {
 		return nil, err
 	}
-	if dog.Synthetic || dog.Status != animal.StatusActive {
+	if dog.Synthetic || !animal.Playable(dog.Status) {
 		return nil, fmt.Errorf("dog %s is no longer playable", row.DogID)
 	}
 	org, err := h.provider.GetOrganization(ctx, row.OrgID)
@@ -221,8 +221,8 @@ func (h *Sessions) pickDog(ctx context.Context, recent []string) (animal.Animal,
 			return animal.Animal{}, err
 		}
 		// the pin bypasses Search, so it must keep Search's promises
-		if a.Synthetic || a.Status != animal.StatusActive {
-			return animal.Animal{}, fmt.Errorf("pinned dog %s is not a real active dog", h.firstDog)
+		if a.Synthetic || !animal.Playable(a.Status) {
+			return animal.Animal{}, fmt.Errorf("pinned dog %s is not a real dog the game can play", h.firstDog)
 		}
 		return *a, nil
 	}

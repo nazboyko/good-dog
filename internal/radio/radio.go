@@ -14,6 +14,7 @@ package radio
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 
@@ -103,6 +104,13 @@ var (
 		"Everybody is bedded down. Here is who is still up.",
 		"Here is who is still awake, then.",
 	}
+	// The bridge for a night that has a bell in it. Three of the four
+	// above promise that everyone named is still in the row, and one of
+	// them will not be. "Here is tonight" is the one that promises
+	// nothing, so it is the only one a bell night may open with. Same
+	// for the opener that says nobody is going anywhere.
+	bellBridge = "Lights are down. Here is tonight."
+	bellOpen   = "Shelter radio, and it is late."
 	hostCloses = []string{
 		"That is everyone tonight. Sleep if you can.",
 		"That is everyone. Get some sleep.",
@@ -179,9 +187,15 @@ func Broadcast(neighbours []Neighbour, own []string, ownVoice Voice, seed int64)
 		at += betweenL
 	}
 
-	add(SpeakerRanger, pick(hostOpens, seed))
+	// a night that will ring the bell cannot open by promising that
+	// everyone is still here
+	open, bridge := pick(hostOpens, seed), pick(hostBridges, seed)
+	if hasBell(neighbours) {
+		open, bridge = bellOpen, bellBridge
+	}
+	add(SpeakerRanger, open)
 	at += afterOne - betweenL
-	add(SpeakerRanger, pick(hostBridges, seed))
+	add(SpeakerRanger, bridge)
 
 	for i, n := range neighbours {
 		if i >= Stories {
@@ -222,32 +236,18 @@ func Broadcast(neighbours []Neighbour, own []string, ownVoice Voice, seed int64)
 	return cues
 }
 
-// story is one neighbour, warm and short, ending on their own name and
-// where they are. Every line traces to the sheet or to the listing's
-// own fields, and nothing reaches for the reveal.
-// quirkOf is the one short true thing this dog does.
+// quirkOf is the one short true thing this dog does, and it is what a
+// neighbour says on the radio. The radio seed is deliberately not used
+// here. It is written to the shape of a listing, "Meet NAME, a
+// high-energy, affectionate companion who...", and three of those in a
+// row at two in the morning is three advertisements. It also carries the
+// loosest claims in the sheet. The quirk is the cadence a tired host
+// actually has.
 func quirkOf(n Neighbour) string {
 	if len(n.Sheet.Quirks) == 0 {
 		return ""
 	}
 	return n.Sheet.Quirks[0].Value
-}
-
-// The radio seed is deliberately not used here. It is written to the
-// shape of a listing, "Meet NAME, a high-energy, affectionate
-// companion who...", and three of those in a row at two in the morning
-// is three advertisements. It also carries the loosest claims in the
-// sheet. The quirk is one short true thing the dog does, which is the
-// cadence a tired host actually has.
-func story(n Neighbour) []string {
-	var lines []string
-	if len(n.Sheet.Quirks) > 0 {
-		if q := sentence(n.Sheet.Quirks[0].Value); q != "" {
-			lines = append(lines, q)
-		}
-	}
-	lines = append(lines, naming(n))
-	return lines
 }
 
 // sentence closes a line that the model returned as a fragment. Done at
@@ -265,7 +265,16 @@ func sentence(s string) string {
 
 // naming is the last line of a neighbour's story: their real name and
 // the real place they are. It is the end of the story on purpose.
+//
+// Unless they are not there any more. A dog whose own listing says she
+// was adopted gets the bell instead: the same slot, the same voice, one
+// quiet line saying she went home. It is the only place in the whole
+// game the radio reports good news, and it is only ever said about a
+// confirmed adoption, never about a listing that simply went quiet.
 func naming(n Neighbour) string {
+	if n.Dog.Status == animal.StatusAdoptedConfirmed {
+		return "That was " + n.Dog.Name + ". " + subject(n.Dog.Sex) + " went home."
+	}
 	where := OrgShort(n.Org.Name)
 	switch {
 	case where != "" && n.Org.City != "":
@@ -275,6 +284,31 @@ func naming(n Neighbour) string {
 	default:
 		return "That is " + n.Dog.Name + "."
 	}
+}
+
+// hasBell is whether tonight names a dog who went home.
+func hasBell(neighbours []Neighbour) bool {
+	for i, n := range neighbours {
+		if i >= Stories {
+			break
+		}
+		if n.Dog.Status == animal.StatusAdoptedConfirmed {
+			return true
+		}
+	}
+	return false
+}
+
+// subject is the pronoun the listing's own sex field gives, and they
+// when it gives none. Never a guess about a real animal.
+func subject(sex string) string {
+	switch strings.ToLower(sex) {
+	case "female":
+		return "She"
+	case "male":
+		return "He"
+	}
+	return "They"
 }
 
 // OrgShort trims an organization name at its first comma, so a line mid
@@ -291,7 +325,7 @@ func OrgShort(name string) string {
 // of the reveal the player has not reached yet.
 func Neighbours(pool []Neighbour, playing animal.Animal, playingOrg string) []Neighbour {
 	eligible := make([]Neighbour, 0, len(pool))
-	heard := map[string]bool{}
+	heard := map[string]int{}
 	for _, n := range pool {
 		if n.Dog.ID == playing.ID || n.Org.ID == playingOrg {
 			continue
@@ -301,11 +335,17 @@ func Neighbours(pool []Neighbour, playing animal.Animal, playingOrg string) []Ne
 			continue
 		}
 		// shelters really are full of dogs called Bella, but two of them
-		// in one broadcast reads as a bug rather than as the truth
-		if heard[strings.ToLower(n.Dog.Name)] {
+		// in one broadcast reads as a bug rather than as the truth. The
+		// one who went home wins the name: her line is the one line of
+		// good news the night has, and a namesake must not silence it.
+		key := strings.ToLower(n.Dog.Name)
+		if prev, ok := heard[key]; ok {
+			if n.Dog.Status == animal.StatusAdoptedConfirmed && eligible[prev].Dog.Status != animal.StatusAdoptedConfirmed {
+				eligible[prev] = n
+			}
 			continue
 		}
-		heard[strings.ToLower(n.Dog.Name)] = true
+		heard[key] = len(eligible)
 		eligible = append(eligible, n)
 	}
 
@@ -317,24 +357,31 @@ func Neighbours(pool []Neighbour, playing animal.Animal, playingOrg string) []Ne
 	var out []Neighbour
 	used := map[string]bool{}
 	for _, n := range eligible {
+		if len(out) == Stories {
+			break
+		}
 		if used[n.Org.ID] {
 			continue
 		}
 		used[n.Org.ID] = true
 		out = append(out, n)
-		if len(out) == Stories {
-			return out
-		}
 	}
 	for _, n := range eligible {
-		if containsDog(out, n.Dog.ID) {
-			continue
-		}
-		out = append(out, n)
 		if len(out) == Stories {
 			break
 		}
+		if !containsDog(out, n.Dog.ID) {
+			out = append(out, n)
+		}
 	}
+	// A dog who went home is read last among the neighbours, right
+	// before the player's own story. Opening the night on a homecoming
+	// and then walking down the row of dogs still there gets the shape
+	// backwards. Nothing else marks it: no pause, no sound, no second
+	// line.
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Dog.Status != animal.StatusAdoptedConfirmed && out[j].Dog.Status == animal.StatusAdoptedConfirmed
+	})
 	return out
 }
 

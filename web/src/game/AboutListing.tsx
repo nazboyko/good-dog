@@ -18,8 +18,12 @@ export function AboutListing({ view, onBack }: { view: EpilogueView; onBack: () 
   return (
     <section className="about">
       <h2>About {view.name}, from the listing</h2>
+      {/* a copy of the page, with the day it was copied. Listings change
+          while nobody is looking, and one of the twelve already has, so
+          this is a snapshot with a date on it, not the page as it stands */}
+      <p className="about-asof">as read on {l.retrieved_on}</p>
       <dl className="about-facts">
-        <dt>listed by</dt>
+        <dt>{view.adopted ? "was listed by" : "listed by"}</dt>
         <dd>
           {view.org_name}, {view.org_city}, {view.org_state}
         </dd>
@@ -83,7 +87,7 @@ export function AboutListing({ view, onBack }: { view: EpilogueView; onBack: () 
       </p>
       <div className="about-actions">
         <a className="btn btn-primary" href={view.listing_url} target="_blank" rel="noopener noreferrer">
-          meet {view.name}
+          {view.adopted ? `${view.name}'s page` : `meet ${view.name}`}
         </a>
         <button type="button" className="btn-quiet" onClick={onBack}>
           back

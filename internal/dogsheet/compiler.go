@@ -229,9 +229,13 @@ func DefaultSheet(a animal.Animal, facts []VerifiedFact) *DogSheet {
 			Energy: neutral, Confidence: neutral, Sociability: neutral,
 			Patience: neutral, FoodDrive: neutral, NoiseSensitivity: neutral,
 		},
-		Movement:   NarrativeInference{Value: neutralMovement, Category: CategoryBehavior},
-		Voice:      NarrativeInference{Value: neutralVoice, Category: CategorySensory},
-		RadioSeed:  NarrativeInference{Value: fmt.Sprintf("%s is here tonight, and that is a good thing.", a.Name), DerivedFrom: seedCites, Category: CategoryTone},
+		Movement: NarrativeInference{Value: neutralMovement, Category: CategoryBehavior},
+		Voice:    NarrativeInference{Value: neutralVoice, Category: CategorySensory},
+		// The canned seed says nothing about where the dog is. A sheet
+		// describes the animal; the session knows the listing, and a dog
+		// whose page says she went home must not have her own night open
+		// on "is here tonight" because the model was unavailable.
+		RadioSeed:  NarrativeInference{Value: fmt.Sprintf("This one is %s.", a.Name), DerivedFrom: seedCites, Category: CategoryTone},
 		Default:    true,
 		CompiledAt: time.Now().UTC(),
 	}

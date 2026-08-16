@@ -496,3 +496,136 @@ func TestTheWaitIsNamedNotCounted(t *testing.T) {
 		t.Errorf("the wait should say what is holding it: %q", StillOn)
 	}
 }
+
+// The bell: a dog whose own listing says she was adopted is not
+// announced as still being in the row. One quiet line, and only ever for
+// a confirmed adoption.
+func TestTheRadioRingsTheBellForAnAdoptedDog(t *testing.T) {
+	home := Neighbour{
+		Dog: animal.Animal{Name: "Bella", Status: animal.StatusAdoptedConfirmed, AdoptedOn: "August 15, 2026"},
+		Org: animal.Organization{Name: "Animal Humane Society, Golden Valley", City: "Golden Valley"},
+	}
+	line := naming(home)
+	if !strings.Contains(line, "went home") {
+		t.Errorf("no bell for an adopted dog: %q", line)
+	}
+	if strings.Contains(line, "That is ") {
+		t.Errorf("%q still announces her as being there", line)
+	}
+	// quiet, not a celebration
+	for _, loud := range []string{"!", "congratulations", "great news", "wonderful"} {
+		if strings.Contains(strings.ToLower(line), loud) {
+			t.Errorf("%q celebrates, the night does not do that", line)
+		}
+	}
+}
+
+// Every other status keeps the ordinary naming line. A listing that went
+// quiet is not a homecoming.
+func TestOnlyAConfirmedAdoptionGetsTheBell(t *testing.T) {
+	for _, st := range []animal.Status{
+		animal.StatusActive,
+		animal.StatusRemovedUnknown,
+		animal.StatusTransferred,
+		animal.StatusUnavailable,
+	} {
+		n := Neighbour{
+			Dog: animal.Animal{Name: "Lori", Status: st},
+			Org: animal.Organization{Name: "Ruff Start Rescue", City: "Princeton"},
+		}
+		line := naming(n)
+		if strings.Contains(line, "went home") {
+			t.Errorf("status %s rang the bell: %q", st, line)
+		}
+		if !strings.Contains(line, "That is Lori") {
+			t.Errorf("status %s lost the naming line: %q", st, line)
+		}
+	}
+}
+
+// A night with a bell in it cannot open by promising that everyone named
+// is still in the row. Whatever the seed draws, the host's first two
+// lines make no such promise when one of the dogs went home.
+func TestABellNightNeverPromisesEveryoneIsHere(t *testing.T) {
+	home := Neighbour{
+		Dog:   animal.Animal{ID: "b", Name: "Bella", Sex: "Female", Status: animal.StatusAdoptedConfirmed},
+		Org:   animal.Organization{ID: "ahs", Name: "Animal Humane Society"},
+		Sheet: &dogsheet.DogSheet{Quirks: []dogsheet.NarrativeInference{{Value: "Loves to snuggle."}}},
+	}
+	here := testPool()[0]
+	promises := []string{"still awake", "still up", "going anywhere"}
+	for seed := int64(0); seed < 8; seed++ {
+		cues := Broadcast([]Neighbour{here, home}, nil, Ranger, seed)
+		opening := cues[0].Line + " " + cues[1].Line
+		for _, p := range promises {
+			if strings.Contains(opening, p) {
+				t.Errorf("seed %d: the host says %q and then rings the bell: %q", seed, p, opening)
+			}
+		}
+		// and the bell is still there
+		var rang bool
+		for _, c := range cues {
+			if strings.Contains(c.Line, "went home") {
+				rang = true
+			}
+		}
+		if !rang {
+			t.Errorf("seed %d: no bell", seed)
+		}
+	}
+	// a night with nobody gone keeps the whole rotation
+	seen := map[string]bool{}
+	for seed := int64(0); seed < 8; seed++ {
+		seen[Broadcast(testPool(), nil, Ranger, seed)[1].Line] = true
+	}
+	if len(seen) < 2 {
+		t.Error("an ordinary night lost its rotation")
+	}
+}
+
+// The dog who went home is read last among the neighbours, so the night
+// walks down the row and then names the one who is not in it, rather
+// than opening on a homecoming.
+func TestTheBellRingsLastAmongTheNeighbours(t *testing.T) {
+	pool := testPool()
+	home := Neighbour{
+		Dog:   animal.Animal{ID: "b", Name: "Bella", Sex: "Female", Status: animal.StatusAdoptedConfirmed},
+		Org:   animal.Organization{ID: "ahs2", Name: "Animal Humane Society"},
+		Sheet: &dogsheet.DogSheet{Quirks: []dogsheet.NarrativeInference{{Value: "Loves to snuggle."}}},
+	}
+	// put her first in the pool so only the rule can move her
+	picked := Neighbours(append([]Neighbour{home}, pool...), animal.Animal{ID: "me"}, "nowhere")
+	if len(picked) < 2 {
+		t.Fatalf("setup: want at least two neighbours, got %d", len(picked))
+	}
+	if picked[len(picked)-1].Dog.ID != "b" {
+		t.Errorf("the adopted dog is not last: %v", names(picked))
+	}
+}
+
+// Three of the twelve are called Bella. If one of them went home, she is
+// the Bella the night reads: a namesake must not silence the bell.
+func TestANamesakeCannotSilenceTheBell(t *testing.T) {
+	stillHere := Neighbour{
+		Dog:   animal.Animal{ID: "b1", Name: "Bella", Status: animal.StatusActive},
+		Org:   animal.Organization{ID: "ahs", Name: "Animal Humane Society"},
+		Sheet: &dogsheet.DogSheet{Quirks: []dogsheet.NarrativeInference{{Value: "Loves toys."}}},
+	}
+	wentHome := stillHere
+	wentHome.Dog = animal.Animal{ID: "b2", Name: "Bella", Sex: "Female", Status: animal.StatusAdoptedConfirmed}
+	picked := Neighbours([]Neighbour{stillHere, wentHome}, animal.Animal{ID: "me"}, "nowhere")
+	if len(picked) != 1 {
+		t.Fatalf("two Bellas in one night: %v", names(picked))
+	}
+	if picked[0].Dog.ID != "b2" {
+		t.Errorf("the namesake who is still here won the name over the one who went home")
+	}
+}
+
+func names(list []Neighbour) []string {
+	out := make([]string, len(list))
+	for i, n := range list {
+		out[i] = n.Dog.ID
+	}
+	return out
+}

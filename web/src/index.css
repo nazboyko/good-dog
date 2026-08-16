@@ -277,6 +277,14 @@ html, body { overflow-x: hidden; }
   pointer-events: none;
 }
 
+/* one room. Two of these overlap during a change, the old one holding
+   its place until the new one has painted and faded up over it, so a
+   beat change is a crossfade and never a flash of bare ground. */
+.scene-room {
+  position: absolute;
+  inset: 0;
+}
+
 /* the canvas keeps the image's own aspect and CSS crops it to the
    viewport, so the shader never has to know about the window shape */
 .scene-canvas {
@@ -296,7 +304,10 @@ html, body { overflow-x: hidden; }
 .scene-veil {
   position: absolute;
   inset: 0;
-  background: rgba(20, 18, 15, 0.8);
+  background: var(--ground);
+  /* opacity is per room and set inline, see veilFor: the night row is
+     far darker and the meeting room far lighter than the enclosure the
+     0.8 was measured against */
 }
 
 /* The shell and, crucially, the screen inside it both sit above the
@@ -564,6 +575,14 @@ html, body { overflow-x: hidden; }
   color: var(--ink-mute);
   font-weight: 400;
   margin: 26px 0 8px;
+}
+
+/* the date the listing copy was taken, quiet, under the heading */
+.about-asof {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin: -8px 0 14px;
 }
 
 .about-facts {

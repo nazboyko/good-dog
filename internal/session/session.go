@@ -137,9 +137,17 @@ type EpilogueView struct {
 	AgeWords string `json:"age_words,omitempty"`
 	// how the three days ended, said once before the staging begins
 	EndingLine string `json:"ending_line,omitempty"`
-	// false only after a chosen ending, where the game has just said she
-	// went home and the reveal must not also say she is waiting
-	StillWaiting  bool `json:"still_waiting"`
+	// The one sentence about the real dog, decided here rather than in
+	// the view: what the listing says now outranks how the three days
+	// ended, and that rule needs a test, not a ternary in a component.
+	RealityLine string `json:"reality_line"`
+	// whether the reveal marks where the fiction and the listing part
+	// ways with "That was your three days."
+	Seam bool `json:"seam"`
+	// true only when the listing says she was adopted. Every line about
+	// where she is goes past tense, and the button stops asking to meet
+	// her and offers her page instead
+	Adopted       bool `json:"adopted"`
 	LongStay      bool `json:"long_stay"`
 	MinutesPlayed int  `json:"minutes_played"`
 
@@ -159,6 +167,10 @@ type ListingRecord struct {
 	Description      string   `json:"description"`
 	// true when the sheet is the canned default and no quotes were read
 	Default bool `json:"default"`
+	// when this copy of the listing was taken, as a plain date, so the
+	// panel presents a snapshot with a date on it and never a stale page
+	// as the current one
+	RetrievedOn string `json:"retrieved_on"`
 }
 
 func newID() string {
@@ -346,17 +358,20 @@ func (s *Session) epilogue(now, started time.Time, ending Ending) *EpilogueView 
 	return &EpilogueView{
 		Name: s.dog.Name,
 		// session scoped so the route can refuse before the epilogue
-		PhotoURL:      "/api/session/" + s.ID + "/photo",
-		PhotoWidth:    w,
-		PhotoHeight:   h,
-		ListingURL:    s.dog.ListingURL,
-		OrgName:       s.org.Name,
-		OrgShort:      strings.TrimSpace(strings.SplitN(s.org.Name, ",", 2)[0]),
-		OrgCity:       s.org.City,
-		OrgState:      StateName(s.org.State),
-		AgeWords:      AgeInWords(s.dog.AgeText),
-		EndingLine:    EndingLine(ending, s.dog.Name, visitor.Adopter(nil).Pronoun.Object),
-		StillWaiting:  StillWaiting(ending),
+		PhotoURL:    "/api/session/" + s.ID + "/photo",
+		PhotoWidth:  w,
+		PhotoHeight: h,
+		ListingURL:  s.dog.ListingURL,
+		OrgName:     s.org.Name,
+		OrgShort:    radio.OrgShort(s.org.Name),
+		OrgCity:     s.org.City,
+		OrgState:    StateName(s.org.State),
+		AgeWords:    AgeInWords(s.dog.AgeText),
+		EndingLine:  EndingLine(ending, s.dog.Name, visitor.Adopter(nil).Pronoun.Object),
+		// what the listing says now, which outranks how the game ended
+		RealityLine:   RealityLine(s.dog, s.org, ending),
+		Seam:          Seam(s.dog, ending),
+		Adopted:       s.dog.Status == animal.StatusAdoptedConfirmed,
 		LongStay:      s.dog.LongStay,
 		MinutesPlayed: int(now.Sub(started).Minutes()),
 		Listing: ListingRecord{
@@ -368,6 +383,7 @@ func (s *Session) epilogue(now, started time.Time, ending Ending) *EpilogueView 
 			Quotes:           quotes,
 			Description:      s.dog.Description,
 			Default:          s.sheet.Default,
+			RetrievedOn:      s.dog.RetrievedAt.Format("January 2, 2006"),
 		},
 	}
 }
@@ -428,14 +444,26 @@ func RadioStory(dog animal.Animal, sheet *dogsheet.DogSheet) []string {
 	if len(sheet.Quirks) > 0 {
 		lines = append(lines, strings.TrimSpace(sheet.Quirks[0].Value))
 	}
-	if dog.LongStay {
+	// The last two lines are the only place the night says the dog is
+	// real, and what it says next depends on what the listing says now.
+	// A dog whose page says she was adopted is not still here, and the
+	// night must not say she has been waiting either.
+	if dog.LongStay && dog.Status != animal.StatusAdoptedConfirmed {
 		// the fact is the filing, never how long, so the wait stays vague
 		lines = append(lines, fmt.Sprintf("%s %s been waiting a while.", p.subject, p.have))
 	}
-	lines = append(lines,
-		fmt.Sprintf("%s name is %s.", p.possessive, dog.Name),
-		fmt.Sprintf("%s %s real, and %s %s still here.", p.subject, p.is, strings.ToLower(p.subject), p.is),
-	)
+	lines = append(lines, fmt.Sprintf("%s name is %s.", p.possessive, dog.Name))
+	switch dog.Status {
+	case animal.StatusAdoptedConfirmed:
+		lines = append(lines, fmt.Sprintf("%s %s real, and %s went home.", p.subject, p.is, strings.ToLower(p.subject)))
+	case animal.StatusActive:
+		lines = append(lines, fmt.Sprintf("%s %s real, and %s %s still here.", p.subject, p.is, strings.ToLower(p.subject), p.is))
+	default:
+		// gone with no stated reason, or a status this code has never
+		// heard of: real, and nothing claimed about where. Not knowing
+		// fails closed, never open to still here
+		lines = append(lines, fmt.Sprintf("%s %s real.", p.subject, p.is))
+	}
 	return lines
 }
 

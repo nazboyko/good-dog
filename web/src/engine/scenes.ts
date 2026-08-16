@@ -18,12 +18,11 @@ const SCENES: Record<Beat, string | null> = {
   wake: "/scenes/enclosure.webp",
   scent: "/scenes/enclosure.webp",
   visitor: "/scenes/enclosure.webp",
-  // the meeting room is its own place, and it arrives with ship 2 of
-  // the scene layer. Until then it is the dark, which is honest enough
-  // for a room the dog has never been in.
-  adoption: null,
-  // night has its own background and arrives with the radio
-  night: null,
+  // The meeting room is its own place, and the room is the point of day
+  // three: she has never been in it, and it does not have a gate.
+  adoption: "/scenes/dating-room.webp",
+  // the same row after lights out, which is where the radio is
+  night: "/scenes/night-enclosure.webp",
   // the boundary. never give these a scene.
   epilogue: null,
   done: null,
@@ -34,6 +33,40 @@ const SCENES: Record<Beat, string | null> = {
 // a call site.
 export function sceneFor(beat: Beat): string | null {
   return SCENES[beat] ?? null;
+}
+
+// How long a room takes to replace another. Matches --fade-quiet, and
+// the old room is held on screen for exactly this long after the new one
+// paints, so the two overlap the whole way through.
+export const CROSSFADE_MS = 520;
+
+// How much ground goes over each room so the words stay readable.
+//
+// Measured, not guessed. Each number is the one where muted text over
+// the brightest part of the middle band, at the 99.9th percentile, is at
+// least as good as the enclosure the copy was originally tuned against,
+// which sits at 3.34 to 1.
+//
+// The night row is the counterintuitive one. It reads far darker, and
+// the instinct is to lift the veil, but that is the mean talking: the
+// light down the corridor is as bright as anything in the daytime room,
+// and at 0.55 muted text over it falls to 1.8. It keeps the same veil as
+// the day and is still plainly night, because its mean is less than half
+// the day room's and the veil does not change that.
+//
+// The meeting room is the opposite and behaves as expected: much lighter
+// throughout, so it needs more before the floor comes back.
+const VEILS: Record<string, number> = {
+  // 3.34 muted, the number every other room has to match
+  "/scenes/enclosure.webp": 0.8,
+  // 3.78 muted. At 0.55 this was 1.83, which is unreadable
+  "/scenes/night-enclosure.webp": 0.8,
+  // 4.06 muted. At 0.8 it was 3.29, just under the floor
+  "/scenes/dating-room.webp": 0.86,
+};
+
+export function veilFor(scene: string): number {
+  return VEILS[scene] ?? 0.8;
 }
 
 // REVEAL_BEATS is the epilogue side of the boundary, named so a test can

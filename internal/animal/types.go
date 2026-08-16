@@ -17,6 +17,21 @@ const (
 	StatusAdoptedConfirmed Status = "ADOPTED_CONFIRMED"
 )
 
+// Playable is whether the game may still put a player inside this dog.
+//
+// Adopted dogs stay in. Deleting one would be a lie by omission and it
+// would throw away the thing the game is for, which is that these are
+// real animals whose situations change while nobody is looking. The
+// reveal has a truthful line for every status here, so the only rule is
+// that the game must never claim she is waiting when she is not.
+func Playable(s Status) bool {
+	switch s {
+	case StatusActive, StatusAdoptedConfirmed, StatusRemovedUnknown, StatusTransferred, StatusUnavailable:
+		return true
+	}
+	return false
+}
+
 func ValidStatus(s Status) bool {
 	switch s {
 	case StatusActive, StatusRemovedUnknown, StatusTransferred, StatusUnavailable, StatusAdoptedConfirmed:
@@ -68,15 +83,19 @@ type Animal struct {
 	// animal. The claim is that filing, never a guess at how long.
 	// LongStayEvidence records how we know, since the fact reads the
 	// same either way and the source would otherwise be lost.
-	LongStay         bool      `json:"long_stay,omitempty"`
-	LongStayEvidence string    `json:"long_stay_evidence,omitempty"`
-	Description      string    `json:"description"`
-	PhotoURL         string    `json:"photo_url"`
-	PhotoLocal       string    `json:"photo_local"`
-	ListingURL       string    `json:"listing_url"`
-	OrgID            string    `json:"org_id"`
-	Status           Status    `json:"status"`
-	RetrievedAt      time.Time `json:"retrieved_at"`
+	LongStay         bool   `json:"long_stay,omitempty"`
+	LongStayEvidence string `json:"long_stay_evidence,omitempty"`
+	Description      string `json:"description"`
+	PhotoURL         string `json:"photo_url"`
+	PhotoLocal       string `json:"photo_local"`
+	ListingURL       string `json:"listing_url"`
+	OrgID            string `json:"org_id"`
+	Status           Status `json:"status"`
+	// AdoptedOn is the date the listing itself gives, copied as written,
+	// for example "August 15, 2026". Only ever set with
+	// ADOPTED_CONFIRMED, because it is the listing's claim and not ours.
+	AdoptedOn   string    `json:"adopted_on,omitempty"`
+	RetrievedAt time.Time `json:"retrieved_at"`
 	// Synthetic marks shape examples, they must never reach a player
 	Synthetic bool `json:"synthetic,omitempty"`
 }

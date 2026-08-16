@@ -79,8 +79,9 @@ func (p *FixtureProvider) Search(ctx context.Context) ([]Animal, error) {
 	var pool []Animal
 	for _, id := range p.order {
 		a := p.animals[id]
-		// synthetic shape examples must never reach a player
-		if a.Synthetic || a.Status != StatusActive {
+		// synthetic shape examples must never reach a player. A real dog
+		// who has left the listings still can: see Playable.
+		if a.Synthetic || !Playable(a.Status) {
 			continue
 		}
 		if ok, _ := PoolFilter(a); ok {

@@ -28,6 +28,7 @@ export interface ListingRecord {
   quotes: string[];
   description: string;
   default: boolean;
+  retrieved_on: string;
 }
 
 export interface EpilogueView {
@@ -42,7 +43,11 @@ export interface EpilogueView {
   org_state: string;
   age_words?: string;
   ending_line?: string;
-  still_waiting: boolean;
+  // what the listing says right now, written by the server: a dog who
+  // was adopted must never be shown as waiting, whatever the ending was
+  reality_line: string;
+  seam: boolean;
+  adopted: boolean;
   long_stay: boolean;
   minutes_played: number;
   listing: ListingRecord;
@@ -198,7 +203,7 @@ export const REVEAL_STEPS = [
   // turn from story to fact, and before the location line so the player
   // has the frame before the contradiction rather than after it.
   { key: "your_three_days", delay: 2400 },
-  { key: "waiting_at", delay: 2600 },
+  { key: "reality", delay: 2600 },
   { key: "age", delay: 2200 },
   { key: "long_stay", delay: 2200 },
   { key: "you_spent", delay: 2200 },
@@ -210,13 +215,14 @@ export type RevealStep = (typeof REVEAL_STEPS)[number]["key"];
 // revealSteps returns the steps that will actually render for this dog.
 // A dog with no age or no long stay fact skips those lines entirely,
 // so no pause is spent on a line that never appears.
-export function revealSteps(view: Pick<EpilogueView, "age_words" | "long_stay" | "still_waiting">) {
+export function revealSteps(view: Pick<EpilogueView, "age_words" | "long_stay" | "seam">) {
   return REVEAL_STEPS.filter((s) => {
     if (s.key === "age") return Boolean(view.age_words);
     if (s.key === "long_stay") return view.long_stay;
-    // the seam only exists on the path where the ending and the listing
-    // disagree, which is the chosen one
-    if (s.key === "your_three_days") return !view.still_waiting;
+    // the seam is where the fiction and the listing part ways. The server
+    // decides when that is: after a chosen ending for a listed dog, and on
+    // every ending for a dog who has since been adopted
+    if (s.key === "your_three_days") return view.seam;
     return true;
   });
 }

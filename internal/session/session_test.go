@@ -24,6 +24,9 @@ var (
 		PhotoLocal:       "cache/photos/rsmn-a-9548.jpg",
 		ListingURL:       "https://new.shelterluv.com/embed/animal/RSMN-A-9548",
 		OrgID:            "ruff-start-rescue",
+		// a real dog always carries a status: the loader refuses one
+		// without, so a fixture with none is not one the game can meet
+		Status: animal.StatusActive,
 	}
 	testOrg = animal.Organization{ID: "ruff-start-rescue", Name: "Ruff Start Rescue", City: "Princeton", State: "MN"}
 )
@@ -775,8 +778,12 @@ func TestTheEpilogueCarriesTheEnding(t *testing.T) {
 	if !strings.Contains(e.EndingLine, testDog.Name) && !strings.Contains(e.EndingLine, "next kennel") {
 		t.Errorf("the ending line should be about this dog: %s", e.EndingLine)
 	}
-	// the short rails have no adoption day, so nobody came
-	if !e.StillWaiting {
-		t.Error("a run with no adoption scene leaves her waiting, and the reveal says so")
+	// the short rails have no adoption day, so nobody came, and the
+	// reveal says she is waiting in so many words
+	if !strings.Contains(e.RealityLine, "waiting") {
+		t.Errorf("a run with no adoption scene leaves her waiting, and the reveal says so: %q", e.RealityLine)
+	}
+	if e.Seam {
+		t.Error("nobody came and she is listed: the ending and the listing agree, no seam")
 	}
 }

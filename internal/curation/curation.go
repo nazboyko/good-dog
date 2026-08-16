@@ -22,7 +22,10 @@ type Dog struct {
 	PhotoURL   string `json:"photo_url"`
 	PhotoLocal string `json:"photo_local"`
 	ListingURL string `json:"listing_url"`
-	Synthetic  bool   `json:"synthetic"`
+	// what the fixture claims right now, so the verifier can hold it up
+	// against what the listing itself says
+	Status    string `json:"status"`
+	Synthetic bool   `json:"synthetic"`
 }
 
 // LoadDogs returns the real dogs only. Example entries point at urls that

@@ -173,15 +173,12 @@ export function Reveal({ view }: { view: EpilogueView }) {
             That was your three days.
           </p>
         )}
-        {/* After a chosen ending the game has just said she went home,
-            so the reveal states the fact it can defend: the listing is
-            still open. Set against the ending it says the thing the game
-            is for, that the ending was the player's to give and has not
-            happened yet. */}
-        <p data-step="waiting_at" className={cls("waiting_at", "reveal-line")}>
-          {view.still_waiting
-            ? `${view.name} is real, and waiting with ${view.org_short} in ${view.org_city}, ${view.org_state}.`
-            : `${view.name} is real, and still listed with ${view.org_short} in ${view.org_city}, ${view.org_state}.`}
+        {/* What the listing says right now, written by the server. It
+            outranks the ending: after a chosen ending a listed dog is
+            still listed, and a dog who has since been adopted was adopted,
+            whatever happened in the three days. */}
+        <p data-step="reality" className={cls("reality", "reveal-line")}>
+          {view.reality_line}
         </p>
         {present("age") && (
           <p data-step="age" className={cls("age", "reveal-line")}>
@@ -190,7 +187,10 @@ export function Reveal({ view }: { view: EpilogueView }) {
         )}
         {present("long_stay") && (
           <p data-step="long_stay" className={cls("long_stay", "reveal-line")}>
-            {view.name} is listed among {view.org_short}'s long stay dogs.
+            {/* past tense once she has gone: it is still true that she
+                was filed there, and it is the one line that gives the
+                adoption its weight without the game taking any credit */}
+            {view.name} {view.adopted ? "was" : "is"} listed among {view.org_short}'s long stay dogs.
           </p>
         )}
         <p data-step="you_spent" className={cls("you_spent", "reveal-line")}>
@@ -204,7 +204,11 @@ export function Reveal({ view }: { view: EpilogueView }) {
             rel="noopener noreferrer"
             tabIndex={has("meet") ? 0 : -1}
           >
-            meet {view.name}
+            {/* the ask is gone once she has a home, but her page is the
+                evidence for the sentence the game just said, in the
+                shelter's own words, so the link stays and the label stops
+                asking */}
+            {view.adopted ? `${view.name}'s page` : `meet ${view.name}`}
           </a>
           <button
             type="button"

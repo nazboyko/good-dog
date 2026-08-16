@@ -492,3 +492,206 @@ func TestARecentNameIsSkippedEvenOnADifferentDog(t *testing.T) {
 		t.Errorf("two dogs should have been left after skipping a shared name, got %d", len(seen))
 	}
 }
+
+// The whole path for a dog who went home while the game was being
+// built. Nothing here calls RealityLine directly: the session starts
+// over http, walks the rails, and the assertion is on the payload the
+// browser would render. That is the only place the promise is kept.
+func TestAnAdoptedDogPlaysAndTellsTheTruth(t *testing.T) {
+	w := newTestWorld(t)
+	dog := w.provider.dog
+	dog.Status = animal.StatusAdoptedConfirmed
+	dog.AdoptedOn = "August 15, 2026"
+	w.provider = stubProvider{dog: dog, org: w.provider.org}
+	srv := w.boot(t)
+
+	res, v := post(t, srv.URL+"/api/session", "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("an adopted dog must still be playable, session start got %d", res.StatusCode)
+	}
+	base := srv.URL + "/api/session/" + v.SessionID
+	post(t, base+"/advance", "") // scent
+	post(t, base+"/advance", "") // visitor
+	post(t, base+"/vocalize", `{"signal":"whine"}`)
+	post(t, base+"/advance", "")
+	v = playExchanges(t, base, "whine", visitor.ExchangesPerScene-1)
+	if v.Beat != session.BeatNight || v.Night == nil {
+		t.Fatalf("expected the night, got %+v", v)
+	}
+	// the night's own story about her follows her listing
+	night := strings.Join(v.Night.Story, " ")
+	if strings.Contains(night, "still here") || strings.Contains(night, "waiting") {
+		t.Errorf("her own night says she is still here: %q", night)
+	}
+	if !strings.Contains(night, "went home") {
+		t.Errorf("her own night never says she went home: %q", night)
+	}
+
+	_, v = post(t, base+"/advance", "")
+	if v.Beat != session.BeatEpilogue || v.Epilogue == nil {
+		t.Fatalf("epilogue beat: %+v", v)
+	}
+	e := v.Epilogue
+	if !strings.Contains(e.RealityLine, "was adopted on August 15, 2026") {
+		t.Errorf("the reveal does not tell the truth: %q", e.RealityLine)
+	}
+	if strings.Contains(e.RealityLine, "waiting") {
+		t.Errorf("the reveal calls an adopted dog waiting: %q", e.RealityLine)
+	}
+	if !e.Seam {
+		t.Error("an adopted dog's reveal must show the seam, the fiction and the listing disagree on every ending")
+	}
+	if !e.Adopted {
+		t.Error("the client is not told she is adopted, so the button still asks to meet her")
+	}
+}
+
+// The other direction: a dog gone from the listings with no stated
+// reason must never produce adoption language anywhere the client can
+// see. The whole payload is searched, not one field, because a new
+// field added later would otherwise be a new place to leak.
+func TestAGoneDogNeverProducesAdoptionLanguageAnywhere(t *testing.T) {
+	w := newTestWorld(t)
+	dog := w.provider.dog
+	dog.Status = animal.StatusRemovedUnknown
+	w.provider = stubProvider{dog: dog, org: w.provider.org}
+	srv := w.boot(t)
+
+	res, v := post(t, srv.URL+"/api/session", "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("session start got %d", res.StatusCode)
+	}
+	base := srv.URL + "/api/session/" + v.SessionID
+	// every string value in the payload, so a field named adopted that
+	// carries false is not mistaken for the word being said to a player
+	var payloads []string
+	record := func(v session.View) {
+		raw, _ := json.Marshal(v)
+		var any interface{}
+		json.Unmarshal(raw, &any)
+		payloads = append(payloads, strings.Join(stringValues(any), " | "))
+	}
+	record(v)
+	_, v = post(t, base+"/advance", "")
+	record(v)
+	_, v = post(t, base+"/advance", "")
+	record(v)
+	_, v = post(t, base+"/vocalize", `{"signal":"whine"}`)
+	record(v)
+	post(t, base+"/advance", "")
+	v = playExchanges(t, base, "whine", visitor.ExchangesPerScene-1)
+	record(v)
+	_, v = post(t, base+"/advance", "")
+	record(v)
+	if v.Beat != session.BeatEpilogue {
+		t.Fatalf("never reached the epilogue: %s", v.Beat)
+	}
+
+	forbidden := []string{"adopt", "went home", "found a home", "forever home"}
+	for i, p := range payloads {
+		low := strings.ToLower(p)
+		for _, word := range forbidden {
+			if strings.Contains(low, word) {
+				t.Errorf("payload %d for a REMOVED_UNKNOWN dog contains %q", i, word)
+			}
+		}
+	}
+	// and the reveal still says the careful thing
+	if !strings.Contains(v.Epilogue.RealityLine, "no longer listed") {
+		t.Errorf("careful wording missing: %q", v.Epilogue.RealityLine)
+	}
+}
+
+// stringValues walks a decoded json value and returns every string in it,
+// which is everything a player could read, and none of the field names.
+func stringValues(v interface{}) []string {
+	switch x := v.(type) {
+	case string:
+		return []string{x}
+	case []interface{}:
+		var out []string
+		for _, e := range x {
+			out = append(out, stringValues(e)...)
+		}
+		return out
+	case map[string]interface{}:
+		var out []string
+		for _, e := range x {
+			out = append(out, stringValues(e)...)
+		}
+		return out
+	}
+	return nil
+}
+
+// The three gates a dog has to pass to be played: the pool, the pin,
+// and the resume after a restart. Each used to say ACTIVE only, which
+// deleted an adopted dog from the game. All three go through the real
+// FixtureProvider here so a filter put back in any one of them fails.
+func TestAnAdoptedDogPassesEveryGate(t *testing.T) {
+	dir := t.TempDir()
+	// the smallest real fixture file: one dog, adopted, and her org
+	fixture := `{
+	  "version": 1,
+	  "organizations": [{"id": "org", "name": "Ruff Start Rescue", "city": "Princeton", "state": "MN"}],
+	  "dogs": [{
+	    "id": "rsmn-a-1", "name": "Bella", "breed": "Pit mix", "age_group": "Adult", "sex": "Female",
+	    "description_html": "<p>` + strings.Repeat("Goofy. Lap pet. ", 20) + `</p>",
+	    "listing_url": "https://example.org/bella", "org_id": "org",
+	    "photo_url": "https://example.org/bella.jpg",
+	    "status": "ADOPTED_CONFIRMED", "adopted_on": "August 15, 2026",
+	    "retrieved_at": "2026-08-15T00:00:00Z"
+	  }]
+	}`
+	path := filepath.Join(dir, "dogs.json")
+	if err := os.WriteFile(path, []byte(fixture), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := animal.NewFixtureProvider(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiler := dogsheet.NewCompiler(failingLLM{}, dogsheet.NewCache(filepath.Join(dir, "sheets")))
+	db, err := session.OpenDB(filepath.Join(dir, "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	// gate one, the pool: no pin, so she has to come out of Search
+	boot := func(pin string) *httptest.Server {
+		h := NewSessions(provider, compiler, db, session.ShortRun, pin)
+		mux := http.NewServeMux()
+		h.Register(mux)
+		srv := httptest.NewServer(mux)
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	pool := boot("")
+	res, v := post(t, pool.URL+"/api/session", "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("the pool refused an adopted dog: %d", res.StatusCode)
+	}
+	if v.Name != "Bella" {
+		t.Fatalf("the pool played %q, want Bella", v.Name)
+	}
+
+	// gate two, the pin
+	pinned := boot("rsmn-a-1")
+	if res, _ := post(t, pinned.URL+"/api/session", ""); res.StatusCode != http.StatusCreated {
+		t.Fatalf("the pin refused an adopted dog: %d", res.StatusCode)
+	}
+
+	// gate three, the resume: a fresh process over the same database
+	base := "/api/session/" + v.SessionID
+	pool.Close()
+	again := boot("")
+	r, err := http.Get(again.URL + base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("a life as an adopted dog was thrown away on restart: %d", r.StatusCode)
+	}
+}

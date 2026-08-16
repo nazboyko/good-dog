@@ -81,6 +81,16 @@ func check(client *http.Client, d curation.Dog, m curation.Manifest) (string, bo
 		ok = false
 	default:
 		notes = append(notes, "listing 200, name found")
+		// A page that still answers 200 and still names the dog can
+		// nevertheless say she is gone. That is what happened to Bella
+		// on the 15th, and reading it by hand is how it was caught.
+		if say, found := statusSays(body); found {
+			notes = append(notes, say)
+			if !agrees(say, d.Status) {
+				notes = append(notes, fmt.Sprintf("fixture says %s", d.Status))
+				ok = false
+			}
+		}
 	}
 
 	switch sum, err := curation.HashFile(d.PhotoLocal); {
@@ -98,6 +108,37 @@ func check(client *http.Client, d curation.Dog, m curation.Manifest) (string, bo
 	}
 
 	return strings.Join(notes, ", "), ok
+}
+
+// statusSays reads what the listing itself claims, in its own words.
+// It never decides anything: a disagreement is a line in the output and
+// a hand edit, because a scraper flipping a real dog's status on its own
+// is exactly the thing this project does not do.
+func statusSays(body string) (string, bool) {
+	flat := spaces.ReplaceAllString(tags.ReplaceAllString(body, " "), " ")
+	if m := adoptedOn.FindStringSubmatch(flat); m != nil {
+		return "listing says adopted on " + m[1], true
+	}
+	if noLonger.MatchString(flat) {
+		return "listing says no longer available, no date given", true
+	}
+	if available.MatchString(flat) || adoptionFee.MatchString(flat) {
+		return "listing says still available", true
+	}
+	return "", false
+}
+
+// agrees is the narrow question: does what the page says match what the
+// fixture claims. Anything the page does not state is not a disagreement.
+func agrees(say string, status string) bool {
+	switch {
+	case strings.Contains(say, "adopted on"):
+		return status == "ADOPTED_CONFIRMED"
+	case strings.Contains(say, "no longer available"):
+		return status != "ACTIVE"
+	default:
+		return status == "ACTIVE"
+	}
 }
 
 func get(client *http.Client, url string) (int, string, error) {
@@ -118,6 +159,12 @@ func get(client *http.Client, url string) (int, string, error) {
 var (
 	tags   = regexp.MustCompile(`<[^>]*>`)
 	spaces = regexp.MustCompile(`(?:&nbsp;|[\s\x{00A0}])+`)
+
+	// what the two shelters actually write, taken from their pages
+	adoptedOn   = regexp.MustCompile(`(?i)was adopted on ([A-Za-z]+ \d{1,2}, \d{4})`)
+	noLonger    = regexp.MustCompile(`(?i)no longer available for adoption`)
+	available   = regexp.MustCompile(`(?i)is available for adoption`)
+	adoptionFee = regexp.MustCompile(`(?i)Adoption ID \d+ Adoption Fee`)
 )
 
 // namedIn matches what a reader would see: tags become spaces, so a name

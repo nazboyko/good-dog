@@ -18,10 +18,10 @@ test("the reveal shows the photo only after the player is told twice the dog is 
 
 test("after the photo the lines keep the opening rhythm, one at a time, the button last", () => {
   // the common path: she is still waiting, so there is no seam to name
-  const steps = revealSteps({ age_words: "four years old", long_stay: true, still_waiting: true });
+  const steps = revealSteps({ age_words: "four years old", long_stay: true, seam: false });
   const keys = steps.map((s) => s.key);
   expect(keys.slice(keys.indexOf("photo") + 1)).toEqual([
-    "waiting_at",
+    "reality",
     "age",
     "long_stay",
     "you_spent",
@@ -81,16 +81,16 @@ test("skipping ahead brings one line forward and keeps every later pause", () =>
 });
 
 test("a dog with no long stay fact and no age spends no pause on those lines", () => {
-  const steps = revealSteps({ age_words: "", long_stay: false, still_waiting: true });
+  const steps = revealSteps({ age_words: "", long_stay: false, seam: false });
   const keys = steps.map((s) => s.key);
   expect(keys).not.toContain("age");
   expect(keys).not.toContain("long_stay");
   expect(keys[keys.length - 1]).toBe("meet");
   // the you_spent line follows the waiting line by exactly its own delay
   const sched = revealSchedule(steps);
-  const waitingAt = sched.find((s) => s.key === "waiting_at")!.at;
+  const realityAt = sched.find((s) => s.key === "reality")!.at;
   const spentAt = sched.find((s) => s.key === "you_spent")!.at;
-  expect(spentAt - waitingAt).toBe(REVEAL_STEPS.find((s) => s.key === "you_spent")!.delay);
+  expect(spentAt - realityAt).toBe(REVEAL_STEPS.find((s) => s.key === "you_spent")!.delay);
   // and every step counts toward the click through, none is a phantom
   let t = 0;
   for (let i = 0; i < steps.length; i++) t = skipAhead(t, steps);
@@ -150,13 +150,14 @@ test("screen transitions breathe: out, a beat of dark, in, and reduced motion sw
   expect(transitionTimes(false)).toEqual({ out: TRANSITION.out, dark: TRANSITION.dark });
 });
 
-// The seam. After a chosen ending the game has just said she went home
-// and the reveal is about to say she is still listed. One line takes
+// The seam. Where the fiction and the listing part ways, one line takes
 // the turn on itself, so the player is told the frame rather than left
-// to discover a contradiction, which is what would read as a trick.
-test("the seam line appears only on the path where the ending and the listing disagree", () => {
-  const chosen = revealSteps({ age_words: "four years old", long_stay: true, still_waiting: false });
-  const waiting = revealSteps({ age_words: "four years old", long_stay: true, still_waiting: true });
+// to discover a contradiction, which is what would read as a trick. The
+// server decides when: after a chosen ending for a listed dog, and on
+// every ending for a dog who has since been adopted.
+test("the seam line appears only where the server says the ending and the listing disagree", () => {
+  const chosen = revealSteps({ age_words: "four years old", long_stay: true, seam: true });
+  const waiting = revealSteps({ age_words: "four years old", long_stay: true, seam: false });
 
   expect(chosen.map((s) => s.key)).toContain("your_three_days");
   expect(waiting.map((s) => s.key)).not.toContain("your_three_days");
@@ -164,7 +165,7 @@ test("the seam line appears only on the path where the ending and the listing di
   // it lands after the photo and before the line it is framing
   const keys = chosen.map((s) => s.key);
   expect(keys.indexOf("your_three_days")).toBeGreaterThan(keys.indexOf("photo"));
-  expect(keys.indexOf("your_three_days")).toBeLessThan(keys.indexOf("waiting_at"));
+  expect(keys.indexOf("your_three_days")).toBeLessThan(keys.indexOf("reality"));
 
   // and it costs a real pause, it is not a phantom step
   const sched = revealSchedule(chosen);

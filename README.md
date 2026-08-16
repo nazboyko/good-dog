@@ -4,7 +4,7 @@
 
 A game where you are the dog. The dog is real.
 
-You spend three days in a shelter as a real adoptable dog, one of twelve taken from real shelter listings. You cannot speak, so you bark, whine, growl or stay quiet, and you watch it land wrong. At the end you learn the dog you were is real, and you get the link to their listing.
+You spend three days in a shelter as a real dog, one of twelve taken from real shelter listings. You cannot speak, so you bark, whine, growl or stay quiet, and you watch it land wrong. At the end you learn the dog you were is real, and you get the link to their listing.
 
 ![The reveal: a photo of Arya, a real husky, under the line "Arya is not a character."](docs/img/reveal.png)
 
@@ -38,7 +38,7 @@ More in [docs/game-design.md](docs/game-design.md) and [docs/tech-stack.md](docs
 
 Twelve real dogs, each taken from a real shelter listing and checked by hand, carried in the repo as [fixtures/dogs.json](fixtures/dogs.json) with the listing url and the description text quoted verbatim. Every photo, name, breed, age and shelter shown in the game comes from that listing rather than from a model.
 
-They are read through an `AnimalProvider` interface so a live adoption feed can replace the fixture set. That live provider is not built. The dogs are real, the listings are real, and the game reads them from a file rather than from an API, so a dog adopted since the file was made will still appear. This is why the reveal says a dog is **still listed** rather than still waiting: that is a fact about a web page, and the listing itself is the thing to trust.
+They are read through an `AnimalProvider` interface so a live adoption feed can replace the fixture set. That live provider is not built. The dogs are real, the listings are real, and the game reads them from a file rather than from an API, so a dog adopted since the file was made will still appear. This is why the reveal only ever says what the listing says. A dog who is listed is waiting, or still listed if the game just gave her a home. A dog whose page went quiet is no longer listed, and the game does not guess why. And a dog whose page says she was adopted was adopted, with the date the page gives. One of the twelve, Bella, went home on August 15 while this was being built, and the game says so.
 
 ## Dependencies and credits
 
