@@ -130,6 +130,16 @@ func main() {
 		} else {
 			log.Printf("radio: all %d host lines are recorded", len(radio.HostLines()))
 		}
+		// and every dog's own lines, which the host check cannot see. The
+		// close of a night is the one line that must not play in silence
+		if quiet := sessions.Unvoiced(context.Background()); len(quiet) > 0 {
+			log.Printf("radio: %d dog lines have no recording, run `make voices`:", len(quiet))
+			for _, q := range quiet {
+				log.Printf("radio:   %s", q)
+			}
+		} else {
+			log.Print("radio: every line every dog can say is recorded")
+		}
 	} else {
 		log.Print("radio: no speech key, tonight is text only")
 	}

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -137,5 +138,40 @@ func TestTheStreamStopsWhenTheListenerLeaves(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "much later") {
 		t.Error("a cue after the listener left must not be written")
+	}
+}
+
+// Once the broadcast is over the stream ends, on purpose and at once.
+// Held open on pings it sat idle after the last cue and the edge in
+// front of the server killed it a few seconds later, which the browser
+// reports as a protocol error and answers with a reconnect that replays
+// the night from cue zero. A stream that ends cleanly is not an error to
+// anyone, and there is nothing left to send.
+func TestTheStreamEndsCleanlyAfterTheBroadcast(t *testing.T) {
+	cues := []radio.Cue{
+		{At: 10 * time.Millisecond, Speaker: radio.SpeakerRanger, Line: "Shelter radio."},
+		{At: 30 * time.Millisecond, Speaker: radio.SpeakerRanger, Line: "Sleep if you can."},
+	}
+	srv := httptest.NewServer(Events(fixedNightly(cues)))
+	defer srv.Close()
+	res, err := http.Get(srv.URL + "/events?session=x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	// read everything to EOF, with a deadline well short of the first
+	// ping: if the server holds the stream open this never returns
+	done := make(chan []byte, 1)
+	go func() {
+		b, _ := io.ReadAll(res.Body)
+		done <- b
+	}()
+	select {
+	case body := <-done:
+		if !strings.Contains(string(body), "event: radio_done") {
+			t.Fatalf("stream ended without radio_done:\n%s", body)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the stream is still open after the broadcast, the edge will kill it and the browser will call that an error")
 	}
 }

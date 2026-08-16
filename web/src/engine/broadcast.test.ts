@@ -59,6 +59,36 @@ test("the stream drives the night when it is alive", () => {
   expect(played).toEqual([0, 1, 2]);
 });
 
+// The server ends the stream after radio_done, on purpose. Left open,
+// EventSource reads that end as a failure and reconnects into a finished
+// broadcast, replaying it from cue zero for nothing. So the client
+// closes its own side the moment it hears radio_done, and an error after
+// that is not a reason to fall back either.
+test("the client closes the stream on radio_done and never reconnects into a finished night", () => {
+  const played: number[] = [];
+  let fellBack = false;
+  const fake = fakeSource();
+  listen("abc", cues, {
+    onCue: (i) => played.push(i),
+    onAllSent: () => {},
+    onFallback: () => (fellBack = true),
+  }, () => fake.source);
+
+  fake.emit("hello");
+  fake.emit("radio", { index: 0 });
+  fake.emit("radio", { index: 1 });
+  fake.emit("radio", { index: 2 });
+  expect(fake.closed()).toBe(false);
+  fake.emit("radio_done");
+  expect(fake.closed()).toBe(true);
+
+  // the server end arrives as an error after our close: nothing happens
+  fake.emit("error");
+  vi.advanceTimersByTime(10000);
+  expect(fellBack).toBe(false);
+  expect(played).toEqual([0, 1, 2]);
+});
+
 // The night has to happen even with the stream dead. A judge on a bad
 // connection should see a night, not a blank screen.
 test("a stream that never speaks hands the night to a local timer", () => {

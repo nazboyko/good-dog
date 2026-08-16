@@ -44,6 +44,51 @@ func NewSessions(provider animal.Provider, compiler *dogsheet.Compiler, db *sess
 	return h
 }
 
+// Unvoiced walks every night the pool can produce, each dog as the one
+// the player lives as and as a neighbour, and returns every line with
+// no recording behind it. Boot logs the result and never records: a
+// missing line has to be a line in the log, not silence at two in the
+// morning on the emotional close of somebody's night.
+func (h *Sessions) Unvoiced(ctx context.Context) []string {
+	if h.voice == nil {
+		return nil
+	}
+	pool, err := h.provider.Search(ctx)
+	if err != nil {
+		// not a missing recording, so not the make voices advice: say
+		// what it is
+		log.Printf("radio: could not read the pool to check recordings: %v", err)
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	note := func(dog string, cues []radio.Cue) {
+		_, missing := radio.WithVoices(cues, h.voice)
+		for _, m := range missing {
+			key := dog + ": " + m
+			if !seen[key] {
+				seen[key] = true
+				out = append(out, key)
+			}
+		}
+	}
+	for _, dog := range pool {
+		org, err := h.provider.GetOrganization(ctx, dog.OrgID)
+		if err != nil {
+			continue
+		}
+		sheet, err := h.compiler.Compile(ctx, dog)
+		var degraded *dogsheet.Degraded
+		if err != nil && !errors.As(err, &degraded) {
+			continue
+		}
+		voice := radio.VoiceFor(dog, sheet)
+		note(dog.Name, radio.Broadcast(nil, session.RadioStory(dog, sheet), voice, 0))
+		note(dog.Name, radio.Broadcast([]radio.Neighbour{{Dog: dog, Org: *org, Sheet: sheet}}, nil, voice, 0))
+	}
+	return out
+}
+
 // WithVoice gives the host his recordings. Optional: without it the
 // night still plays, in text, which is the same night a player with the
 // sound off gets anyway.

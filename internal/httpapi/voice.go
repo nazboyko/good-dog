@@ -30,10 +30,12 @@ func NewHostVoice(cache *audiocache.Cache, client *elevenlabs.Client, budget *el
 	return &HostVoice{cache: cache, client: client, budget: budget, voiceID: voiceID, settings: settings}
 }
 
-// keyFor is the cache name for one line in one voice. The voice is part
-// of the key because the same sentence read by the host and by a dog
-// are two different recordings.
-func keyFor(text string, v radio.Voice) string {
+// KeyFor is the cache name for one line in one voice. The voice and its
+// settings are part of the key because the same sentence read by the
+// host and by a dog, or by two dogs sharing a library voice at different
+// stabilities, are different recordings. Exported so the recorder plans
+// against the same key the night looks up.
+func KeyFor(text string, v radio.Voice) string {
 	settings := elevenlabs.VoiceSettings{Stability: v.Stability, SimilarityBoost: v.Similarity}
 	return audiocache.Key(text, v.ID, settings.String())
 }
@@ -43,7 +45,7 @@ func (h *HostVoice) Lookup(text string, v radio.Voice) (string, bool) {
 	if h == nil || h.cache == nil {
 		return "", false
 	}
-	key := keyFor(text, v)
+	key := KeyFor(text, v)
 	if _, ok := h.cache.Get(key); !ok {
 		return "", false
 	}
@@ -65,7 +67,7 @@ func (h *HostVoice) Store(ctx context.Context, text string, v radio.Voice) (stri
 	if err != nil {
 		return "", 0, err
 	}
-	key := keyFor(text, v)
+	key := KeyFor(text, v)
 	if _, err := h.cache.Put(key, audio); err != nil {
 		return "", 0, err
 	}

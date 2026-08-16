@@ -321,7 +321,10 @@ function rgb(p: ArrayLike<number>): string {
 // rather than drawn wrong: a dark room is a loss, a true color one is a
 // broken promise.
 function render2dFallback(canvas: HTMLCanvasElement, image: Decoded): VisionMode {
-  const ctx = canvas.getContext("2d");
+  // read back once to prove the filter took, and say so up front: a
+  // context that will be read is laid out differently, and Chrome warns
+  // in the console when it has to guess
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) {
     throw new Error("no webgl and no 2d context, nothing can draw this scene");
   }
@@ -389,7 +392,8 @@ async function sourceEdges(blob: Blob): Promise<Edges | null> {
   const probe = document.createElement("canvas");
   probe.width = 32;
   probe.height = 2;
-  const ctx = probe.getContext("2d");
+  // this canvas exists only to be read back
+  const ctx = probe.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
   const small = await createImageBitmap(blob, {
     imageOrientation: "from-image",

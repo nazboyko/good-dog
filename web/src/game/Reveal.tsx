@@ -22,7 +22,7 @@ export function minutesPhrase(minutes: number): string {
 // reserved. Appearing is a class that changes opacity and nothing else,
 // so nothing above a new line moves by a pixel. Reserved space plus
 // fade, never insert and push.
-export function Reveal({ view }: { view: EpilogueView }) {
+export function Reveal({ view, onAnother }: { view: EpilogueView; onAnother?: () => void }) {
   const [shown, setShown] = useState(0);
   const [about, setAbout] = useState(false);
   const origin = useRef(performance.now());
@@ -221,6 +221,23 @@ export function Reveal({ view }: { view: EpilogueView }) {
           >
             About {view.name}, from the listing
           </button>
+          {/* the way out. Quiet, under everything else, and it does not
+              share a line with the ask: this dog's page comes first and
+              the next life is a separate thought. */}
+          {onAnother && (
+            <button
+              type="button"
+              className="btn-link"
+              data-another
+              tabIndex={has("meet") ? 0 : -1}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAnother();
+              }}
+            >
+              live another life
+            </button>
+          )}
         </div>
       </section>
     </>

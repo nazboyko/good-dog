@@ -284,7 +284,13 @@ export function listen(
     }
   });
   source.addEventListener("radio_done", () => {
-    if (!usingFallback) handlers.onAllSent();
+    if (usingFallback) return;
+    handlers.onAllSent();
+    // the server has said everything it will ever say on this stream and
+    // ends it. Close our side first, so EventSource does not read that end
+    // as a failure and reconnect into a finished broadcast
+    source?.close();
+    source = null;
   });
   source.addEventListener("error", () => {
     // EventSource retries by itself, so an error only matters while

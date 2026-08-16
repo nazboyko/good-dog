@@ -170,7 +170,12 @@ func plan(ctx context.Context, provider animal.Provider, compiler *dogsheet.Comp
 		if text == "" {
 			return
 		}
-		key := v.ID + "\x00" + text
+		// Dedupe on the cache key, which carries the settings, not on
+		// the voice id. Three dogs read by one library voice each carry
+		// their own stability from their own sheet, so the same sentence
+		// is three recordings. Deduping on the id recorded the first and
+		// left the other two silent, and reported all three as done.
+		key := httpapi.KeyFor(text, v)
 		if seen[key] {
 			return
 		}

@@ -45,6 +45,11 @@ export function Run() {
       .then((v) => {
         if (cancelled) return;
         if (v && v.beat !== "done") {
+          // this includes the reveal. A reload during the ending comes
+          // back to the same dog, because a judge who opened the shelter
+          // page in another tab and got the game tab evicted must not
+          // return to a stranger. The way out is the button, which ends
+          // the life on the server so it cannot resume after that.
           setView(v);
         } else {
           // a definite miss: the life is gone, start clean
@@ -137,6 +142,20 @@ export function Run() {
 
   const next = () => transition(() => advance(view.session_id));
 
+  // Living another life. The finished run is advanced to done on the
+  // server so it can never resume into a stale ending, forgotten locally
+  // so the reload lands on a fresh start, and remembered as finished so
+  // the next dog is somebody else. Then a new life, with the same fade.
+  const another = () =>
+    transition(async () => {
+      // end the life on the server so a stale tab cannot resume into it,
+      // but never wait on that: a stalled fetch here would hold the
+      // player on the dark screen, and the next life does not need it
+      void advance(view.session_id).catch(() => {});
+      forgetRun();
+      return startRun();
+    });
+
   return (
     <main className={`run run-${view.beat}`}>
       <SceneBackdrop beat={view.beat} />
@@ -148,7 +167,7 @@ export function Run() {
         )}
         {view.beat === "night" && <Night view={view} onNext={next} busy={busy} />}
         {(view.beat === "epilogue" || view.beat === "done") && view.epilogue && (
-          <Reveal view={view.epilogue} />
+          <Reveal view={view.epilogue} onAnother={another} />
         )}
         {error && <p className="error">{error}</p>}
       </div>

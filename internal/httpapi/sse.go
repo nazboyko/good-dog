@@ -45,9 +45,9 @@ type Nightly interface {
 	Tonight(ctx context.Context, sessionID string) []radio.Cue
 }
 
-// stream writes each cue when it comes due and then holds the
-// connection open with pings. Offsets are measured from the moment the
-// client connected, so the broadcast starts when somebody is listening.
+// stream writes each cue when it comes due, sends the closing marker and
+// ends. Offsets are measured from the moment the client connected, so
+// the broadcast starts when somebody is listening.
 func stream(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, cues []radio.Cue) {
 	start := time.Now()
 	timer := time.NewTimer(time.Hour)
@@ -77,8 +77,20 @@ func stream(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, cu
 	if len(cues) > 0 {
 		fmt.Fprint(w, "event: radio_done\ndata: {}\n\n")
 		flusher.Flush()
+		// The broadcast is over and nothing else will ever be sent on
+		// this stream, so it ends here, cleanly. Holding it open on pings
+		// used to leave an idle HTTP/2 stream for the edge to kill some
+		// seconds after the last cue, which the browser reports as a
+		// protocol error and EventSource answers with a pointless
+		// reconnect that replays the night from cue zero. A stream that
+		// ends on purpose is not an error to anyone.
+		return
 	}
 
+	// A stream with nothing to say is held open on pings only so that
+	// EventSource does not poll it every few seconds. It never learns
+	// about a night that starts later; the client opens a new stream at
+	// the night beat.
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
 	for {

@@ -19,6 +19,7 @@ import (
 	"github.com/nazboyko/good-dog/internal/animal"
 	"github.com/nazboyko/good-dog/internal/dogsheet"
 	"github.com/nazboyko/good-dog/internal/gemini"
+	"github.com/nazboyko/good-dog/internal/radio"
 	"github.com/nazboyko/good-dog/internal/session"
 	"github.com/nazboyko/good-dog/internal/visitor"
 )
@@ -693,5 +694,44 @@ func TestAnAdoptedDogPassesEveryGate(t *testing.T) {
 	r.Body.Close()
 	if r.StatusCode != http.StatusOK {
 		t.Fatalf("a life as an adopted dog was thrown away on restart: %d", r.StatusCode)
+	}
+}
+
+// A voice cache that has everything except what the test takes away.
+type holeyVoice struct{ missing string }
+
+func (h holeyVoice) Lookup(text string, v radio.Voice) (string, bool) {
+	if text == h.missing {
+		return "", false
+	}
+	return "/api/audio/x.mp3", true
+}
+func (h holeyVoice) Store(context.Context, string, radio.Voice) (string, int, error) {
+	return "", 0, errors.New("boot never records")
+}
+
+// Boot walks every dog's night and names the lines with no recording.
+// This is a runtime guard, so it has to be seen failing: take one line
+// away and it must be named, take none away and it must be quiet.
+func TestBootNamesEveryUnvoicedDogLine(t *testing.T) {
+	h, _ := newPool(t, 3)
+	ctx := context.Background()
+
+	if quiet := h.WithVoice(holeyVoice{}).Unvoiced(ctx); len(quiet) != 0 {
+		t.Fatalf("a full cache is quiet, got %v", quiet)
+	}
+	// the close of the night, the line this exists for
+	quiet := h.WithVoice(holeyVoice{missing: "She is real, and she is still here."}).Unvoiced(ctx)
+	if len(quiet) != 3 {
+		t.Fatalf("three dogs each lose their close, want 3 lines named, got %d: %v", len(quiet), quiet)
+	}
+	for _, q := range quiet {
+		if !strings.Contains(q, "still here") || !strings.HasPrefix(q, "Dog ") {
+			t.Errorf("a missing line is named with its dog: %q", q)
+		}
+	}
+	// and with no voice at all there is nothing to check
+	if quiet := h.WithVoice(nil).Unvoiced(ctx); quiet != nil {
+		t.Errorf("no cache means no check, got %v", quiet)
 	}
 }
