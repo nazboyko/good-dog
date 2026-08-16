@@ -17,6 +17,7 @@ import (
 
 	"github.com/nazboyko/good-dog/internal/animal"
 	"github.com/nazboyko/good-dog/internal/dogsheet"
+	"github.com/nazboyko/good-dog/internal/radio"
 	"github.com/nazboyko/good-dog/internal/visitor"
 )
 
@@ -34,6 +35,17 @@ type Session struct {
 	dog   animal.Animal
 	org   animal.Organization
 	sheet *dogsheet.DogSheet
+	// tonight's broadcast, built once from real neighbours. Empty is a
+	// night with no radio, which the client still plays as a quiet one.
+	radio []radio.Cue
+}
+
+// Tonight hands the session the broadcast for its night beat. Built
+// outside because it needs the pool, which the session does not have.
+func (s *Session) Tonight(cues []radio.Cue) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.radio = cues
 }
 
 // View is what the client renders. Fields are filled per beat, so the
@@ -83,8 +95,12 @@ type VisitorView struct {
 }
 
 type NightView struct {
-	// the radio story, short lines with pauses, from the real sheet
+	// the radio story about this dog, short lines, from the real sheet
 	Story []string `json:"story"`
+	// tonight's broadcast, the whole cue list with its offsets. The
+	// stream is what plays it; this is here so a client whose stream
+	// never connects can still run the night off its own timer.
+	Radio []radio.Cue `json:"radio,omitempty"`
 }
 
 // EpilogueView is the reveal. It is the first and only place the photo
@@ -174,6 +190,23 @@ func (s *Session) State() State {
 	return st
 }
 
+// tonight returns the broadcast, filtered by the same reveal guard as
+// every other line on an early beat. A neighbour at the player's own
+// shelter is dropped at selection, and this is the net under that.
+func (s *Session) tonight() []radio.Cue {
+	s.mu.Lock()
+	cues := s.radio
+	s.mu.Unlock()
+	out := make([]radio.Cue, 0, len(cues))
+	for _, c := range cues {
+		if s.beforeReveal(c.Line, "") == "" {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // apply runs one input through the pure machine under the lock.
 func (s *Session) apply(in Input) error {
 	s.mu.Lock()
@@ -245,7 +278,7 @@ func (s *Session) View(now time.Time) View {
 				story = append(story, kept)
 			}
 		}
-		v.Night = &NightView{Story: story}
+		v.Night = &NightView{Story: story, Radio: s.tonight()}
 	case BeatEpilogue, BeatDone:
 		v.Epilogue = s.epilogue(now, started)
 	}

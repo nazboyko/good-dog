@@ -81,7 +81,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	sessions.Register(mux)
-	mux.HandleFunc("GET /events", httpapi.Events())
+	mux.HandleFunc("GET /events", httpapi.Events(sessions))
 	mux.HandleFunc("GET /api/audio/{file}", httpapi.Audio("assets/audio", ttsCacheDir))
 	mux.HandleFunc("GET /api/spike/gemini", httpapi.SpikeGemini(geminiClient))
 	mux.HandleFunc("GET /api/spike/tts", httpapi.SpikeTTS(elevenClient, ttsCache, &elevenlabs.Budget{}))

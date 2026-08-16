@@ -2,6 +2,8 @@
 // draw. Beat order, what is visible, and what a signal means all live on
 // the server. This file only asks and renders. Plain TypeScript, no React.
 
+import type { RadioCue } from "./broadcast";
+
 export type Beat = "wake" | "scent" | "visitor" | "night" | "epilogue" | "done";
 
 export type Vocalization =
@@ -67,7 +69,7 @@ export interface View {
     arc?: string;
     parting?: string;
   };
-  night?: { story: string[] };
+  night?: { story: string[]; radio?: RadioCue[] };
   epilogue?: EpilogueView;
 }
 

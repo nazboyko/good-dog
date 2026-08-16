@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { View, Vocalization } from "../engine/run";
 import { VOCALIZATION_LABELS, closeStagger, prefersReducedMotion } from "../engine/run";
+import { listen } from "../engine/broadcast";
 import { forDisplay } from "../engine/display";
 
 // One small component per beat. Presentation only: the engine decides
@@ -126,20 +127,42 @@ export function Visitor({
   );
 }
 
+// Night is the only screen the server drives rather than the player.
+// The broadcast arrives a line at a time over the stream, and the
+// button waits until the night has finished so nobody sleeps through
+// the middle of somebody else's story.
 export function Night({ view, onNext, busy }: { view: View; onNext: () => void; busy: boolean }) {
+  const cues = view.night?.radio ?? [];
+  const [heard, setHeard] = useState(0);
+  const [over, setOver] = useState(cues.length === 0);
+
+  useEffect(() => {
+    if (cues.length === 0) {
+      setOver(true);
+      return;
+    }
+    setHeard(0);
+    setOver(false);
+    return listen(view.session_id, cues, {
+      // cues arrive in order and never twice, so the count is the
+      // highest index heard plus one
+      onCue: (i) => setHeard((n) => Math.max(n, i + 1)),
+      onDone: () => setOver(true),
+    });
+    // the broadcast belongs to this session's night, nothing else restarts it
+  }, [view.session_id, cues.length]);
+
   return (
     <section className="beat beat-night">
       <p className="beat-line">Lights out. Somewhere down the hall, a radio.</p>
-      {view.night && (
-        <blockquote className="radio">
-          {view.night.story.map((line, i) => (
-            <p key={i} style={{ animationDelay: `${i * 1.6}s` }}>
-              {forDisplay(line)}
-            </p>
-          ))}
-        </blockquote>
-      )}
-      <button onClick={onNext} disabled={busy}>
+      <blockquote className="radio">
+        {cues.slice(0, heard).map((cue, i) => (
+          <p key={i} className={`radio-${cue.speaker}`}>
+            {forDisplay(cue.line)}
+          </p>
+        ))}
+      </blockquote>
+      <button onClick={onNext} disabled={busy || !over}>
         sleep
       </button>
     </section>

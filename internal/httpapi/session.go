@@ -12,6 +12,7 @@ import (
 
 	"github.com/nazboyko/good-dog/internal/animal"
 	"github.com/nazboyko/good-dog/internal/dogsheet"
+	"github.com/nazboyko/good-dog/internal/radio"
 	"github.com/nazboyko/good-dog/internal/session"
 )
 
@@ -60,7 +61,59 @@ func (h *Sessions) rebuild(ctx context.Context, row session.Row) (*session.Sessi
 	if err != nil && !errors.As(err, &degraded) {
 		return nil, err
 	}
-	return session.Resume(row.ID, *dog, *org, sheet, rails, row.State), nil
+	s := session.Resume(row.ID, *dog, *org, sheet, rails, row.State)
+	s.Tonight(h.tonight(ctx, *dog, session.RadioStory(*dog, sheet)))
+	return s, nil
+}
+
+// tonight builds the night broadcast from other real dogs in the pool.
+// Sheets come from the compiler's cache, so this costs no model calls
+// on a warm cache. A night with no neighbours is a quiet night, never
+// an error: the run matters more than the radio.
+func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []string) []radio.Cue {
+	pool, err := h.provider.Search(ctx)
+	if err != nil {
+		log.Printf("radio: pool unavailable, tonight is quiet: %v", err)
+		return nil
+	}
+	var candidates []radio.Neighbour
+	for _, dog := range pool {
+		if dog.ID == playing.ID || dog.OrgID == playing.OrgID {
+			continue
+		}
+		org, err := h.provider.GetOrganization(ctx, dog.OrgID)
+		if err != nil {
+			continue
+		}
+		sheet, err := h.compiler.Compile(ctx, dog)
+		var degraded *dogsheet.Degraded
+		if err != nil && !errors.As(err, &degraded) {
+			continue
+		}
+		candidates = append(candidates, radio.Neighbour{Dog: dog, Org: *org, Sheet: sheet})
+	}
+	// no cap here: Neighbours still has to drop duplicate names and
+	// default sheets, and capping the candidates first meant one
+	// duplicate inside the first three left the night a story short
+	return radio.Broadcast(radio.Neighbours(candidates, playing, playing.OrgID), own)
+}
+
+// Tonight is the Nightly side of the stream: what this session's night
+// holds. An unknown or finished session gets nothing, which the stream
+// serves as a connection with no cues rather than an error.
+func (h *Sessions) Tonight(ctx context.Context, sessionID string) []radio.Cue {
+	if sessionID == "" {
+		return nil
+	}
+	s, err := h.store.Get(ctx, sessionID)
+	if err != nil {
+		return nil
+	}
+	v := s.View(h.now())
+	if v.Night == nil {
+		return nil
+	}
+	return v.Night.Radio
 }
 
 func (h *Sessions) Register(mux *http.ServeMux) {
@@ -92,6 +145,7 @@ func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := session.New(dog, *org, sheet, h.rails, h.now())
+	s.Tonight(h.tonight(ctx, dog, session.RadioStory(dog, sheet)))
 	if err := h.store.Put(ctx, s, h.now()); err != nil {
 		log.Printf("session start: save %s: %v", s.ID, err)
 	}
