@@ -38,9 +38,14 @@ func Handler() (http.Handler, error) {
 		}
 		if _, err := fs.Stat(dist, clean); err == nil {
 			// the bundle is content hashed, so it can be cached hard.
-			// index.html cannot: it is what points at the new hashes.
-			if strings.HasPrefix(clean, "assets/") {
+			// index.html cannot: it is what points at the new hashes, so
+			// a stale copy sends a returning player to a bundle that the
+			// last deploy took away.
+			switch {
+			case strings.HasPrefix(clean, "assets/"):
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			case clean == "index.html":
+				w.Header().Set("Cache-Control", "no-cache")
 			}
 			files.ServeHTTP(w, r)
 			return
