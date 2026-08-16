@@ -37,11 +37,17 @@ type Pronoun struct {
 	// it writes {is} rather than the word, so a they/them visitor reads
 	// "they are still watching you" and not "they is".
 	Is string
+	// Object is the form after a preposition: went home with her. The
+	// ending line needs it and nothing else does yet, but leaving it out
+	// meant the best line in the game said a dog went home with the
+	// staff, because "them" already means the staff everywhere in this
+	// scene.
+	Object string
 }
 
 var (
-	she = Pronoun{"she", "her", "is"}
-	he  = Pronoun{"he", "his", "is"}
+	she = Pronoun{"she", "her", "is", "her"}
+	he  = Pronoun{"he", "his", "is", "him"}
 )
 
 // Archetype is a kind of person who stops at a kennel. Preferences are
@@ -273,6 +279,7 @@ func (a Archetype) say(line string) string {
 		"{they}", a.Pronoun.Subject,
 		"{their}", a.Pronoun.Possessive,
 		"{is}", a.Pronoun.Is,
+		"{them}", a.Pronoun.Object,
 	).Replace(line)
 }
 

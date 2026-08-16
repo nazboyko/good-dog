@@ -55,6 +55,7 @@ test("the reveal shows the photo as an untouched image", async () => {
         org_city: "Princeton",
         org_state: "Minnesota",
         age_words: "four years old",
+        still_waiting: true,
         long_stay: true,
         minutes_played: 12,
         listing: {

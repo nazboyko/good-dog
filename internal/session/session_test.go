@@ -702,3 +702,81 @@ func TestTheWayForwardChangesEveryExchange(t *testing.T) {
 		}
 	}
 }
+
+// The seam. The three days are fiction and the listing is not, and the
+// epilogue has to hold both without either one pretending to be the
+// other. This is the most delicate text in the product.
+func TestTheEndingNeverContradictsTheReveal(t *testing.T) {
+	for _, e := range []Ending{EndingChosen, EndingAnotherDog, EndingNobodyToday} {
+		line := EndingLine(e, "Venus", "her")
+		if line == "" {
+			t.Fatalf("%s has no ending line", e)
+		}
+		if !strings.HasSuffix(line, ".") || strings.Contains(line, "!") {
+			t.Errorf("%s is not the house voice: %s", e, line)
+		}
+		// the ending says what happened, it never tells the player how to feel
+		for _, plea := range []string{"adopt", "you can", "could be", "help", "please", "still needs"} {
+			if strings.Contains(strings.ToLower(line), plea) {
+				t.Errorf("%s reaches for the player with %q: %s", e, plea, line)
+			}
+		}
+	}
+
+	// After a chosen ending the game has just put her in somebody's car.
+	// The reveal must not also say she is waiting.
+	if StillWaiting(EndingChosen) {
+		t.Error("the reveal would say she is waiting right after saying she went home")
+	}
+	for _, e := range []Ending{EndingAnotherDog, EndingNobodyToday} {
+		if !StillWaiting(e) {
+			t.Errorf("%s leaves her at the shelter, the reveal should say so", e)
+		}
+	}
+
+	// and the two chosen lines must not both be about going home
+	chosen := EndingLine(EndingChosen, "Venus", "her")
+	if !strings.Contains(chosen, "went home with her") {
+		t.Errorf("she went home with the woman, not with the staff: %s", chosen)
+	}
+	another := EndingLine(EndingAnotherDog, "Venus", "her")
+	if strings.Contains(another, "Venus") {
+		t.Errorf("the another dog line says nothing about this dog: %s", another)
+	}
+	if !strings.HasPrefix(another, "She left") {
+		t.Errorf("the woman the player just met is the subject, not a stranger: %s", another)
+	}
+	if !strings.Contains(another, "next kennel") {
+		t.Errorf("the other ending has to name who did leave: %s", another)
+	}
+}
+
+// The epilogue carries the ending through, so the reveal never has to
+// guess which of the three just happened.
+func TestTheEpilogueCarriesTheEnding(t *testing.T) {
+	s := New(testDog, testOrg, testSheet(), ShortRun, t0)
+	for s.Beat() != BeatEpilogue {
+		if s.Beat() == BeatVisitor {
+			if err := s.Vocalize(Silence); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.Advance(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := s.View(t0).Epilogue
+	if e == nil {
+		t.Fatal("no epilogue")
+	}
+	if e.EndingLine == "" {
+		t.Error("the reveal opens on how the three days ended")
+	}
+	if !strings.Contains(e.EndingLine, testDog.Name) && !strings.Contains(e.EndingLine, "next kennel") {
+		t.Errorf("the ending line should be about this dog: %s", e.EndingLine)
+	}
+	// the short rails have no adoption day, so nobody came
+	if !e.StillWaiting {
+		t.Error("a run with no adoption scene leaves her waiting, and the reveal says so")
+	}
+}

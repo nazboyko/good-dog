@@ -4,7 +4,7 @@
 
 import type { RadioCue } from "./broadcast";
 
-export type Beat = "wake" | "scent" | "visitor" | "night" | "epilogue" | "done";
+export type Beat = "wake" | "scent" | "visitor" | "adoption" | "night" | "epilogue" | "done";
 
 export type Vocalization =
   | "playful_bark"
@@ -41,6 +41,8 @@ export interface EpilogueView {
   org_city: string;
   org_state: string;
   age_words?: string;
+  ending_line?: string;
+  still_waiting: boolean;
   long_stay: boolean;
   minutes_played: number;
   listing: ListingRecord;
@@ -187,6 +189,15 @@ export const REVEAL_STEPS = [
   { key: "you_were", delay: 0 },
   { key: "not_a_character", delay: 2600 },
   { key: "photo", delay: 2400 },
+  // Only after a chosen ending, and only there. The game has just said
+  // she went home, and the next line says she is still listed. Left to
+  // discover, the quietest reading of that is that the shelter has not
+  // updated the page, which confirms the fiction and blames a web page.
+  // Told plainly, it is the frame: the three days were yours, the
+  // listing is today. It goes after the photo because the photo is the
+  // turn from story to fact, and before the location line so the player
+  // has the frame before the contradiction rather than after it.
+  { key: "your_three_days", delay: 2400 },
   { key: "waiting_at", delay: 2600 },
   { key: "age", delay: 2200 },
   { key: "long_stay", delay: 2200 },
@@ -199,10 +210,13 @@ export type RevealStep = (typeof REVEAL_STEPS)[number]["key"];
 // revealSteps returns the steps that will actually render for this dog.
 // A dog with no age or no long stay fact skips those lines entirely,
 // so no pause is spent on a line that never appears.
-export function revealSteps(view: Pick<EpilogueView, "age_words" | "long_stay">) {
+export function revealSteps(view: Pick<EpilogueView, "age_words" | "long_stay" | "still_waiting">) {
   return REVEAL_STEPS.filter((s) => {
     if (s.key === "age") return Boolean(view.age_words);
     if (s.key === "long_stay") return view.long_stay;
+    // the seam only exists on the path where the ending and the listing
+    // disagree, which is the chosen one
+    if (s.key === "your_three_days") return !view.still_waiting;
     return true;
   });
 }

@@ -18,6 +18,10 @@ const SCENES: Record<Beat, string | null> = {
   wake: "/scenes/enclosure.webp",
   scent: "/scenes/enclosure.webp",
   visitor: "/scenes/enclosure.webp",
+  // the meeting room is its own place, and it arrives with ship 2 of
+  // the scene layer. Until then it is the dark, which is honest enough
+  // for a room the dog has never been in.
+  adoption: null,
   // night has its own background and arrives with the radio
   night: null,
   // the boundary. never give these a scene.

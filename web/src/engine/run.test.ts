@@ -17,7 +17,9 @@ test("the reveal shows the photo only after the player is told twice the dog is 
 });
 
 test("after the photo the lines keep the opening rhythm, one at a time, the button last", () => {
-  const keys = REVEAL_STEPS.map((s) => s.key);
+  // the common path: she is still waiting, so there is no seam to name
+  const steps = revealSteps({ age_words: "four years old", long_stay: true, still_waiting: true });
+  const keys = steps.map((s) => s.key);
   expect(keys.slice(keys.indexOf("photo") + 1)).toEqual([
     "waiting_at",
     "age",
@@ -79,7 +81,7 @@ test("skipping ahead brings one line forward and keeps every later pause", () =>
 });
 
 test("a dog with no long stay fact and no age spends no pause on those lines", () => {
-  const steps = revealSteps({ age_words: "", long_stay: false });
+  const steps = revealSteps({ age_words: "", long_stay: false, still_waiting: true });
   const keys = steps.map((s) => s.key);
   expect(keys).not.toContain("age");
   expect(keys).not.toContain("long_stay");
@@ -146,4 +148,31 @@ test("screen transitions breathe: out, a beat of dark, in, and reduced motion sw
   // reduced motion: no waits at all, the swap is instant
   expect(transitionTimes(true)).toEqual({ out: 0, dark: 0 });
   expect(transitionTimes(false)).toEqual({ out: TRANSITION.out, dark: TRANSITION.dark });
+});
+
+// The seam. After a chosen ending the game has just said she went home
+// and the reveal is about to say she is still listed. One line takes
+// the turn on itself, so the player is told the frame rather than left
+// to discover a contradiction, which is what would read as a trick.
+test("the seam line appears only on the path where the ending and the listing disagree", () => {
+  const chosen = revealSteps({ age_words: "four years old", long_stay: true, still_waiting: false });
+  const waiting = revealSteps({ age_words: "four years old", long_stay: true, still_waiting: true });
+
+  expect(chosen.map((s) => s.key)).toContain("your_three_days");
+  expect(waiting.map((s) => s.key)).not.toContain("your_three_days");
+
+  // it lands after the photo and before the line it is framing
+  const keys = chosen.map((s) => s.key);
+  expect(keys.indexOf("your_three_days")).toBeGreaterThan(keys.indexOf("photo"));
+  expect(keys.indexOf("your_three_days")).toBeLessThan(keys.indexOf("waiting_at"));
+
+  // and it costs a real pause, it is not a phantom step
+  const sched = revealSchedule(chosen);
+  const photoAt = sched.find((s) => s.key === "photo")!.at;
+  const seamAt = sched.find((s) => s.key === "your_three_days")!.at;
+  expect(seamAt).toBeGreaterThan(photoAt);
+  // every step still counts toward the click through
+  let t = 0;
+  for (let i = 0; i < chosen.length; i++) t = skipAhead(t, chosen);
+  expect(revealedCount(t, chosen)).toBe(chosen.length);
 });

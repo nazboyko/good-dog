@@ -126,12 +126,17 @@ type EpilogueView struct {
 	OrgName     string `json:"org_name"`
 	// the org's name up to its first comma, for lines mid sentence:
 	// "Animal Humane Society" not the full adoption center title
-	OrgShort      string `json:"org_short"`
-	OrgCity       string `json:"org_city"`
-	OrgState      string `json:"org_state"`
-	AgeWords      string `json:"age_words,omitempty"`
-	LongStay      bool   `json:"long_stay"`
-	MinutesPlayed int    `json:"minutes_played"`
+	OrgShort string `json:"org_short"`
+	OrgCity  string `json:"org_city"`
+	OrgState string `json:"org_state"`
+	AgeWords string `json:"age_words,omitempty"`
+	// how the three days ended, said once before the staging begins
+	EndingLine string `json:"ending_line,omitempty"`
+	// false only after a chosen ending, where the game has just said she
+	// went home and the reveal must not also say she is waiting
+	StillWaiting  bool `json:"still_waiting"`
+	LongStay      bool `json:"long_stay"`
+	MinutesPlayed int  `json:"minutes_played"`
 
 	Listing ListingRecord `json:"listing"`
 }
@@ -259,14 +264,16 @@ func (s *Session) View(now time.Time) View {
 	switch beat {
 	case BeatScent:
 		v.Scent = &ScentView{Movement: s.beforeReveal(s.sheet.Movement.Value, "")}
-	case BeatVisitor:
+	case BeatVisitor, BeatAdoption:
 		who := st.VisitorAtGate()
+		last := beat == BeatAdoption
+		past := st.pastVisits()
 		vv := &VisitorView{
 			Arrival:    who.Arrival,
 			Options:    vocalizations,
 			HeardLabel: who.Pronoun.Subject + " heard",
 			Exchange:   st.Exchange(),
-			Exchanges:  visitor.ExchangesPerScene,
+			Exchanges:  exchangesFor(beat),
 		}
 		if signal != "" {
 			m := Narrate(signal)
@@ -275,10 +282,20 @@ func (s *Session) View(now time.Time) View {
 			vv.Mismatch = &m
 			vv.Body = visitor.Body(who, scene)
 			vv.Settled = visitor.Settled(who, scene)
-			vv.Onward = visitor.Onward(len(scene), visitor.ExchangesPerScene)
+			vv.Onward = visitor.Onward(len(scene), exchangesFor(beat))
+			if last {
+				// the meeting room reads on the run's head start, so what
+				// the player sees matches what is being counted
+				vv.Body = visitor.AdoptionBody(who, past, scene)
+				vv.Settled = visitor.AdoptionSettled(who, past, scene)
+				vv.Onward = visitor.AdoptionOnward(len(scene), exchangesFor(beat))
+			}
 			// the visit only reads back its shape once it is over
-			if len(scene) >= visitor.ExchangesPerScene {
+			if len(scene) >= exchangesFor(beat) {
 				end := visitor.Close(who, scene)
+				if last {
+					end = visitor.CloseAdoption(who, past, scene)
+				}
 				vv.Body = end.Body
 				vv.Arc = end.Arc
 				vv.Parting = end.Parting
@@ -294,7 +311,7 @@ func (s *Session) View(now time.Time) View {
 		}
 		v.Night = &NightView{Story: story, Radio: s.tonight()}
 	case BeatEpilogue, BeatDone:
-		v.Epilogue = s.epilogue(now, started)
+		v.Epilogue = s.epilogue(now, started, st.Ending)
 	}
 	return v
 }
@@ -312,7 +329,7 @@ func (s *Session) beforeReveal(line, fallback string) string {
 	return line
 }
 
-func (s *Session) epilogue(now, started time.Time) *EpilogueView {
+func (s *Session) epilogue(now, started time.Time, ending Ending) *EpilogueView {
 	// never nil: a default sheet has no quotes and the panel must not break
 	quotes := []string{}
 	for _, f := range s.sheet.Facts {
@@ -333,6 +350,8 @@ func (s *Session) epilogue(now, started time.Time) *EpilogueView {
 		OrgCity:       s.org.City,
 		OrgState:      StateName(s.org.State),
 		AgeWords:      AgeInWords(s.dog.AgeText),
+		EndingLine:    EndingLine(ending, s.dog.Name, visitor.Adopter(nil).Pronoun.Object),
+		StillWaiting:  StillWaiting(ending),
 		LongStay:      s.dog.LongStay,
 		MinutesPlayed: int(now.Sub(started).Minutes()),
 		Listing: ListingRecord{

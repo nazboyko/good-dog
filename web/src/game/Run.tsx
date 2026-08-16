@@ -136,7 +136,9 @@ export function Run() {
       <div className={phaseClass}>
         {view.beat === "wake" && <Wake view={view} onNext={next} busy={busy} />}
         {view.beat === "scent" && <Scent view={view} onNext={next} busy={busy} />}
-        {view.beat === "visitor" && <Visitor view={view} onSignal={signal} onNext={next} busy={busy} />}
+        {(view.beat === "visitor" || view.beat === "adoption") && (
+          <Visitor view={view} onSignal={signal} onNext={next} busy={busy} />
+        )}
         {view.beat === "night" && <Night view={view} onNext={next} busy={busy} />}
         {(view.beat === "epilogue" || view.beat === "done") && view.epilogue && (
           <Reveal view={view.epilogue} />

@@ -14,11 +14,14 @@ func say(v Vocalization) Input { return Input{Kind: InputVocalize, Signal: v} }
 
 // visit answers a whole scene with the same signal, the way a player
 // clicking one button four times would.
+// visit answers a whole scene, however long this one is. Adoption day
+// is the same machinery with more exchanges.
 func visit(t *testing.T, r Rails, s State, v Vocalization) State {
 	t.Helper()
-	for i := 0; i < visitor.ExchangesPerScene; i++ {
-		if s.Beat != BeatVisitor {
-			t.Fatalf("exchange %d: not at a visitor, at %s", i, s.Beat)
+	beat := s.Beat
+	for i := 0; i < exchangesFor(beat); i++ {
+		if s.Beat != beat {
+			t.Fatalf("exchange %d: scene changed from %s to %s", i, beat, s.Beat)
 		}
 		s = run(t, r, s, say(v), adv)
 	}
@@ -65,11 +68,15 @@ func TestShortRunIsThePrototypeRails(t *testing.T) {
 	}
 }
 
-func TestFullRunWalksThreeDaysAndTwoVisitorsADay(t *testing.T) {
+// Two visitors a day for two days, then adoption day, which is one
+// longer scene in the meeting room and no night: the ending goes
+// straight into the reveal rather than putting a radio show between the
+// peak of the run and the photo.
+func TestFullRunWalksThreeDaysEndingOnAdoptionDay(t *testing.T) {
 	s := NewState(FullRun, t0)
 	visitors := 0
 	for guard := 0; guard < 100 && s.Beat != BeatDone; guard++ {
-		if s.Beat == BeatVisitor {
+		if isVisit(s.Beat) {
 			s = visit(t, FullRun, s, Silence)
 			visitors++
 			continue
@@ -79,15 +86,15 @@ func TestFullRunWalksThreeDaysAndTwoVisitorsADay(t *testing.T) {
 	if s.Beat != BeatDone {
 		t.Fatalf("run did not finish, stuck at day %d %s", s.Day, s.Beat)
 	}
-	if visitors != 6 || len(s.Bond) != 6 {
-		t.Errorf("three days times two visitors: met %d, bond %d", visitors, len(s.Bond))
+	if visitors != 5 || len(s.Bond) != 5 {
+		t.Errorf("two days of two visitors plus adoption day: met %d, bond %d", visitors, len(s.Bond))
 	}
 	days := map[int]int{}
 	for _, e := range s.Bond {
 		days[e.Day]++
 	}
-	if days[1] != 2 || days[2] != 2 || days[3] != 2 {
-		t.Errorf("bond history must record two encounters per day: %v", days)
+	if days[1] != 2 || days[2] != 2 || days[3] != 1 {
+		t.Errorf("two encounters on days one and two, one on adoption day: %v", days)
 	}
 	if s.Ending == EndingNone {
 		t.Error("a finished run must carry an ending")
@@ -313,24 +320,40 @@ func TestUnmarshalRefusesUnknownBeatOrZeroDay(t *testing.T) {
 func TestFullRunMeetsBothVisitorsAndRecordsHonestOutcomes(t *testing.T) {
 	s := NewState(FullRun, t0)
 	for guard := 0; guard < 100 && s.Beat != BeatDone; guard++ {
-		if s.Beat == BeatVisitor {
-			// silence, which both archetypes read as calm
+		if isVisit(s.Beat) {
+			// silence, which every archetype reads as calm
 			s = run(t, FullRun, s, say(Silence))
 		}
 		s = run(t, FullRun, s, adv)
+	}
+	// adoption day is the last thing that happens, and it decides the run
+	if s.Ending == EndingNone {
+		t.Error("a finished run must carry one of the three endings")
+	}
+	last := s.Bond[len(s.Bond)-1]
+	if last.Archetype != adopterID || last.Day != 3 {
+		t.Errorf("the last encounter of a run is the adoption scene: %+v", last)
+	}
+	if len(last.Signals) != visitor.AdoptionExchanges {
+		t.Errorf("the last scene is %d exchanges, got %d", visitor.AdoptionExchanges, len(last.Signals))
 	}
 	met := map[string]visitor.Outcome{}
 	for _, e := range s.Bond {
 		if e.Archetype == "" || e.Outcome == "" || e.Arc == "" {
 			t.Fatalf("every encounter must name who came, how it ended and its shape: %+v", e)
 		}
-		if len(e.Signals) != visitor.ExchangesPerScene {
+		if len(e.Signals) == 0 {
 			t.Fatalf("every encounter holds the whole scene: %+v", e)
 		}
 		met[e.Archetype] = e.Outcome
 	}
-	if len(met) != len(visitor.Archetypes) {
-		t.Errorf("a three day run must meet every archetype, met %v", met)
+	// every archetype from the row, plus the one who only ever comes on
+	// the last day
+	if len(met) != len(visitor.Archetypes)+1 {
+		t.Errorf("a three day run must meet every archetype and the adopter, met %v", met)
+	}
+	if _, ok := met[adopterID]; !ok {
+		t.Errorf("adoption day must put the adopter in the bond history: %v", met)
 	}
 	if met[visitor.QuietSeeker.ID] != visitor.OutcomeAsked {
 		t.Errorf("silence should reach the visitor who is looking, got %q", met[visitor.QuietSeeker.ID])
@@ -342,6 +365,83 @@ func TestFullRunMeetsBothVisitorsAndRecordsHonestOutcomes(t *testing.T) {
 	for _, e := range s.Bond {
 		if e.Outcome == "failed" || e.Outcome == "lost" {
 			t.Errorf("outcome vocabulary must never blame: %+v", e)
+		}
+	}
+}
+
+// Three honest endings, and every one of them reachable by playing.
+// This is the piece that turns the run into a story with an end rather
+// than a stop, so a run that can only ever end one way is a broken game
+// however green the rest of the suite is.
+func TestEveryEndingIsReachableByPlaying(t *testing.T) {
+	// each signal played the whole way through a run, which is the
+	// bluntest way to play and still has to reach all three
+	found := map[Ending][]Vocalization{}
+	for _, v := range vocalizations {
+		s := NewState(FullRun, t0)
+		for guard := 0; guard < 200 && s.Beat != BeatDone; guard++ {
+			if isVisit(s.Beat) {
+				s = run(t, FullRun, s, say(v))
+			}
+			s = run(t, FullRun, s, adv)
+		}
+		if s.Ending == EndingNone {
+			t.Fatalf("answering %s all run left no ending", v)
+		}
+		found[s.Ending] = append(found[s.Ending], v)
+	}
+	for _, want := range []Ending{EndingChosen, EndingAnotherDog, EndingNobodyToday} {
+		if len(found[want]) == 0 {
+			t.Errorf("no way of playing reaches %q: %v", want, found)
+		}
+	}
+}
+
+// The ending is read off the adoption scene, not off the days before
+// it. A warm week makes the last visitor easier to reach, it does not
+// decide the run on its own.
+func TestTheEndingComesFromTheAdoptionScene(t *testing.T) {
+	// silence all week, then howling in the meeting room
+	s := NewState(FullRun, t0)
+	for guard := 0; guard < 200 && s.Beat != BeatAdoption && s.Beat != BeatDone; guard++ {
+		if isVisit(s.Beat) {
+			s = run(t, FullRun, s, say(Silence))
+		}
+		s = run(t, FullRun, s, adv)
+	}
+	if s.Beat != BeatAdoption {
+		t.Fatalf("never reached adoption day, stuck at day %d %s", s.Day, s.Beat)
+	}
+	warmWeek := s
+	for guard := 0; guard < 50 && s.Beat != BeatDone; guard++ {
+		if isVisit(s.Beat) {
+			s = run(t, FullRun, s, say(Howl))
+		}
+		s = run(t, FullRun, s, adv)
+	}
+	howled := s.Ending
+
+	// the same warm week, met with silence in the meeting room
+	s = warmWeek
+	for guard := 0; guard < 50 && s.Beat != BeatDone; guard++ {
+		if isVisit(s.Beat) {
+			s = run(t, FullRun, s, say(Silence))
+		}
+		s = run(t, FullRun, s, adv)
+	}
+	if howled == s.Ending {
+		t.Errorf("the last scene has to matter: howling and silence both ended %q", howled)
+	}
+}
+
+// No ending is a loss, and none of them is a verdict on the player.
+func TestNoEndingIsALoss(t *testing.T) {
+	for _, e := range []Ending{EndingChosen, EndingAnotherDog, EndingNobodyToday} {
+		if e == EndingNone {
+			t.Error("the empty ending is not one of the three")
+		}
+		if strings.Contains(string(e), "fail") || strings.Contains(string(e), "lost") {
+			t.Errorf("an ending named like a loss: %q", e)
 		}
 	}
 }

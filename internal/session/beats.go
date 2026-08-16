@@ -7,9 +7,13 @@ package session
 type Beat string
 
 const (
-	BeatWake     Beat = "wake"
-	BeatScent    Beat = "scent"
-	BeatVisitor  Beat = "visitor"
+	BeatWake    Beat = "wake"
+	BeatScent   Beat = "scent"
+	BeatVisitor Beat = "visitor"
+	// BeatAdoption is the last visitor of the run, in the meeting room.
+	// Same machinery as a visit, longer, and its close decides how the
+	// three days ended.
+	BeatAdoption Beat = "adoption"
 	BeatNight    Beat = "night"
 	BeatEpilogue Beat = "epilogue"
 	BeatDone     Beat = "done"

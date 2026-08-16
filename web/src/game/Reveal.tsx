@@ -156,6 +156,9 @@ export function Reveal({ view }: { view: EpilogueView }) {
         className="reveal fade is-shown"
         onClick={done ? undefined : skip}
       >
+        {view.ending_line && (
+          <p className="reveal-ending">{view.ending_line}</p>
+        )}
         <p data-step="you_were" className={cls("you_were", "reveal-line")}>
           You were {view.name}.
         </p>
@@ -165,8 +168,20 @@ export function Reveal({ view }: { view: EpilogueView }) {
         <figure data-step="photo" className={cls("photo", "reveal-photo")} style={{ aspectRatio: ratio }}>
           <img src={view.photo_url} alt={`${view.name}, a real dog`} />
         </figure>
+        {present("your_three_days") && (
+          <p data-step="your_three_days" className={cls("your_three_days", "reveal-line")}>
+            That was your three days.
+          </p>
+        )}
+        {/* After a chosen ending the game has just said she went home,
+            so the reveal states the fact it can defend: the listing is
+            still open. Set against the ending it says the thing the game
+            is for, that the ending was the player's to give and has not
+            happened yet. */}
         <p data-step="waiting_at" className={cls("waiting_at", "reveal-line")}>
-          {view.name} is real, and waiting with {view.org_short} in {view.org_city}, {view.org_state}.
+          {view.still_waiting
+            ? `${view.name} is real, and waiting with ${view.org_short} in ${view.org_city}, ${view.org_state}.`
+            : `${view.name} is real, and still listed with ${view.org_short} in ${view.org_city}, ${view.org_state}.`}
         </p>
         {present("age") && (
           <p data-step="age" className={cls("age", "reveal-line")}>

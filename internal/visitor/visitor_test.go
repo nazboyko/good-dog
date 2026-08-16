@@ -439,3 +439,145 @@ func TestOnwardNeverReadsTheSameTwiceAndNeverCounts(t *testing.T) {
 		t.Error("there is always a way forward")
 	}
 }
+
+// The meeting room is not the row. The adoption scene reused the row's
+// body lines once, so the warmest rung of the most important beat in
+// the game read "she puts a hand flat against the gate" in a room with
+// no gate. A shared vocabulary is only shared until the furniture
+// changes.
+func TestTheMeetingRoomNeverNamesTheRow(t *testing.T) {
+	a := Adopter(nil)
+	rowThings := []string{"gate", "row", "kennel", "cage", "hall"}
+	var lines []string
+	for _, b := range Bands {
+		lines = append(lines, a.render(meetingRoom, b), a.render(meetingRoomSettled, b))
+	}
+	lines = append(lines, a.Arrival...)
+	for _, o := range []Outcome{OutcomeAsked, OutcomeParted, OutcomeMovedOn} {
+		lines = append(lines, adoptionParting(a, o))
+	}
+	lines = append(lines, adoptionLabels...)
+	lines = append(lines, AdoptionOnward(AdoptionExchanges, AdoptionExchanges))
+	for _, line := range lines {
+		if line == "" {
+			t.Error("the meeting room has an empty line where copy should be")
+		}
+		for _, thing := range rowThings {
+			if strings.Contains(strings.ToLower(line), thing) {
+				t.Errorf("the meeting room names %q, which is not in this room: %s", thing, line)
+			}
+		}
+	}
+	// and the two tables are distinct, same rule as the row
+	for _, b := range Bands {
+		if a.render(meetingRoom, b) == a.render(meetingRoomSettled, b) {
+			t.Errorf("band %s reads the same after one answer as after six", b)
+		}
+	}
+}
+
+// Every label is printed at a fixed exchange with no idea how the scene
+// is going, so every one of them has to be true in any band. An earlier
+// set said "she has not looked at the door", which the distant body
+// line contradicts on the same screen, and "one more", which is the
+// counter this game does not use.
+func TestAdoptionLabelsAreTrueInEveryBand(t *testing.T) {
+	for nth := 1; nth <= AdoptionExchanges; nth++ {
+		label := AdoptionOnward(nth, AdoptionExchanges)
+		if label == "" {
+			t.Fatalf("exchange %d has no way forward", nth)
+		}
+		for _, counting := range []string{"one more", "last", "final", " of ", "first"} {
+			if strings.Contains(strings.ToLower(label), counting) {
+				t.Errorf("exchange %d counts at the player: %q", nth, label)
+			}
+		}
+		for _, digit := range "0123456789" {
+			if strings.ContainsRune(label, digit) {
+				t.Errorf("exchange %d has a number in it: %q", nth, label)
+			}
+		}
+		// a label may not claim something a body line can contradict
+		for _, claim := range []string{"has not looked", "watching you", "leaning"} {
+			if strings.Contains(strings.ToLower(label), claim) {
+				t.Errorf("exchange %d claims %q, which a band can contradict: %q", nth, claim, label)
+			}
+		}
+	}
+	if got := AdoptionOnward(AdoptionExchanges, AdoptionExchanges); got != "the day goes on" {
+		t.Errorf("the last scene closes like the others, got %q", got)
+	}
+}
+
+// Same standards as the row: consequence wording, no verdict, present
+// tense, no placeholder shipped raw. This is the copy that was written
+// last and reviewed least.
+func TestAdoptionCopyKeepsTheHouseRules(t *testing.T) {
+	a := Adopter(nil)
+	warm := Adopter([]Past{{Outcome: OutcomeAsked}, {Outcome: OutcomeAsked}})
+	var lines []string
+	lines = append(lines, a.Arrival...)
+	lines = append(lines, warm.Arrival...)
+	for _, b := range Bands {
+		lines = append(lines, a.render(meetingRoom, b), a.render(meetingRoomSettled, b))
+	}
+	for _, o := range []Outcome{OutcomeAsked, OutcomeParted, OutcomeMovedOn} {
+		lines = append(lines, adoptionParting(a, o))
+	}
+	lines = append(lines, adoptionLabels...)
+
+	blame := []string{"wrong", "fail", "should have", "too bad", "unfortunately", "sorry",
+		"missed", "lost", "mistake", "better luck", "try again", "good job"}
+	for _, line := range lines {
+		lower := strings.ToLower(line)
+		for _, word := range blame {
+			if strings.Contains(lower, word) {
+				t.Errorf("adoption copy blames the player with %q: %s", word, line)
+			}
+		}
+		for _, bad := range []string{"{", "}", "%!", "%s"} {
+			if strings.Contains(line, bad) {
+				t.Errorf("adoption copy renders %q raw: %s", bad, line)
+			}
+		}
+		if strings.Contains(line, "—") || strings.Contains(line, "!") {
+			t.Errorf("adoption copy is not the house voice: %s", line)
+		}
+	}
+	// a warm run keeps the image the scene is built on
+	if warm.Arrival[len(warm.Arrival)-1] != a.Arrival[len(a.Arrival)-1] {
+		t.Error("the floor line is what makes the labels true, it must survive a warm run")
+	}
+	// the nobody ending lands back in the room, not on the person leaving
+	movedOn := adoptionParting(a, OutcomeMovedOn)
+	if !strings.Contains(movedOn, "lead back on") {
+		t.Errorf("the ending with no result must land back with the dog: %s", movedOn)
+	}
+}
+
+// The scene is six exchanges on a ladder spread for four, so it has to
+// be re-spread or the top rung arrives on the second answer and the
+// decisive scene of the run is over before it starts.
+func TestTheMeetingRoomLadderFitsTheLongerScene(t *testing.T) {
+	a := Adopter(nil)
+	warm := []Past{{Outcome: OutcomeAsked}, {Outcome: OutcomeAsked}}
+	for _, history := range [][]Past{nil, warm} {
+		// silence is the warmest answer, so this is the fastest climb
+		var scene []Signal
+		reached := map[Band]bool{}
+		for i := 0; i < AdoptionExchanges; i++ {
+			scene = append(scene, Silence)
+			b := adoptionBand(a, history, scene)
+			reached[b] = true
+			if b == BandClose && i < AdoptionExchanges-2 {
+				t.Errorf("the top rung arrives at answer %d of %d, the scene is over too early",
+					i+1, AdoptionExchanges)
+			}
+		}
+		// and the last answer can still change where it lands
+		full := append(append([]Signal{}, scene[:len(scene)-1]...), Howl)
+		if adoptionBand(a, history, full) == adoptionBand(a, history, scene) {
+			t.Error("the last answer of the run has to be able to change the ending")
+		}
+	}
+}

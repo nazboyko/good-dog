@@ -462,6 +462,16 @@ html, body { overflow-x: hidden; }
 
 /* ---- the reveal: fits one viewport by design ---- */
 
+/* How the three days ended, said once before the staging starts. Quiet
+   and set apart: it belongs to the story that just finished, not to the
+   sequence about the real dog that follows it. */
+.reveal-ending {
+  margin: 0 0 22px;
+  color: var(--ink-mute);
+  font-size: var(--text-small);
+  animation: settle 900ms ease-out both;
+}
+
 .reveal { cursor: default; }
 
 .reveal-line {
@@ -474,11 +484,15 @@ html, body { overflow-x: hidden; }
    follows from the cap so a tall photo never overflows sideways. */
 .reveal-photo {
   margin: 4px 0 clamp(10px, 2vh, 22px);
-  /* the photo takes what is left after the lines, the button and the
-     shell padding, measured at 488px, and never more than half the
-     screen. one formula for every height, no gaps between breakpoints */
-  max-height: min(50vh, calc(100vh - 500px));
-  max-height: min(50dvh, calc(100dvh - 500px));
+  /* The photo takes what is left after the lines, the button and the
+     shell padding, and never more than half the screen. One formula for
+     every height, no gaps between breakpoints.
+     The reserve went from 488 to 560 when adoption day added two lines
+     to the stack: the ending line above the staging, and the seam line
+     after the photo on the chosen path. Both declarations have to move
+     together, the dvh one is what actually applies. */
+  max-height: min(50vh, calc(100vh - 560px));
+  max-height: min(50dvh, calc(100dvh - 560px));
   max-width: 100%;
   border-radius: 3px;
   overflow: hidden;

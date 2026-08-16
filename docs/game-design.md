@@ -32,7 +32,7 @@ Generated as sheets: archetype, hidden preferences, dealbreakers, patience, scen
 Neighbor kennels hold other real dogs from the pool with idle behavior from their sheets. A too loud night bark cascades into the whole shelter waking up, comedy on purpose, the game must not be relentlessly sad. Night is Shelter Radio: a real SSE stream. Old Ranger hosts, 3 to 5 dog stories in their own voices grounded in real descriptions, each ends with a real name and place, weather segment from the shelter's real location. The bell rings when the sync worker sees a dog leave the listings, careful wording only.
 
 ## Adoption day and endings
-Final visitor is synthesized from bond history, a longer scene in a new room with sensory overload the player breathes through in sniff mode. Endings: chosen (quiet and warm), another dog chosen (that night the radio tells your story), nobody today (tomorrow is another day, day 4 exists). No ending is a loss.
+Final visitor is synthesized from bond history, a longer scene in a new room with sensory overload the player breathes through in sniff mode. Endings: chosen (quiet and warm), another dog chosen (the radio consolation is cut: adoption day ends on the scene and goes straight into the reveal, because a broadcast between the peak and the photo spends it), nobody today (tomorrow is another day, day 4 exists). No ending is a loss.
 
 ## Emotional hooks in core
 Good dog as the only reward, no counter shown. Real waiting time in the epilogue: "You spent 40 minutes as Bailey. Bailey has been waiting 214 days." The front door sound makes every ear in the shelter rise. Share card: "I WAS MILO for 38 minutes. He is real."
