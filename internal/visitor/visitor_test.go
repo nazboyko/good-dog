@@ -405,3 +405,37 @@ func TestNoTemplateEverReachesAPlayerRaw(t *testing.T) {
 		}
 	}
 }
+
+// The player should feel where they are in a visit without being given
+// a count. Every beat says something different, and none of it is a
+// number or a fraction.
+func TestOnwardNeverReadsTheSameTwiceAndNeverCounts(t *testing.T) {
+	seen := map[string]int{}
+	for nth := 1; nth <= ExchangesPerScene; nth++ {
+		label := Onward(nth, ExchangesPerScene)
+		if label == "" {
+			t.Fatalf("exchange %d has no way forward", nth)
+		}
+		seen[label]++
+		for _, digit := range "0123456789" {
+			if strings.ContainsRune(label, digit) {
+				t.Errorf("exchange %d counts at the player: %q", nth, label)
+			}
+		}
+		for _, counting := range []string{" of ", "last", "final", "first", "next up"} {
+			if strings.Contains(strings.ToLower(label), counting) {
+				t.Errorf("exchange %d labels the position: %q", nth, label)
+			}
+		}
+	}
+	if len(seen) != ExchangesPerScene {
+		t.Errorf("a visit of %d exchanges reads as %d different beats: %v", ExchangesPerScene, len(seen), seen)
+	}
+	if got := Onward(ExchangesPerScene, ExchangesPerScene); got != "the day goes on" {
+		t.Errorf("the last exchange ends the visit, got %q", got)
+	}
+	// out of range on either side still gives a usable label
+	if Onward(0, 4) == "" || Onward(99, 4) == "" {
+		t.Error("there is always a way forward")
+	}
+}

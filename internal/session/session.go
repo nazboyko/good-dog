@@ -88,6 +88,14 @@ type VisitorView struct {
 	// what the visitor's body says back, the only reading of comfort
 	// the player ever gets
 	Body string `json:"body,omitempty"`
+	// the exchanges already past, oldest first, as the player can still
+	// see them. The screen reads as a conversation growing rather than
+	// the same frame reprinted, so it carries the visit and not only
+	// its newest line. Runs of the same reading are already collapsed.
+	Settled []string `json:"settled,omitempty"`
+	// what the button says to leave this exchange, different on every
+	// beat so the visit has a felt shape without a counter
+	Onward string `json:"onward,omitempty"`
 	// set only on the last exchange: the shape of the whole visit and
 	// how they left
 	Arc     string `json:"arc,omitempty"`
@@ -262,6 +270,8 @@ func (s *Session) View(now time.Time) View {
 			vv.Signal = signal
 			vv.Mismatch = &m
 			vv.Body = visitor.Body(who, scene)
+			vv.Settled = visitor.Settled(who, scene)
+			vv.Onward = visitor.Onward(len(scene), visitor.ExchangesPerScene)
 			// the visit only reads back its shape once it is over
 			if len(scene) >= visitor.ExchangesPerScene {
 				end := visitor.Close(who, scene)

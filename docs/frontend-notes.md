@@ -38,7 +38,7 @@ The reveal is sized to fit one viewport by design: the photo takes what is left 
 
 ## Reserved slots grow, they never hide
 
-Where two things swap in one reserved space (the vocalization panel and the narrator), stack them in a single grid cell rather than absolutely positioning both. Absolute children contribute no height, so longer copy overflows silently and no test catches it. In one grid cell the slot is at least its `min-height`, the reserved floor, and grows if the copy needs more. The floor is measured against the tallest real case plus headroom for one wrapped line: 330px desktop, 405px under 480px wide, checked at 320, 390, 768 and 1280.
+Where two things swap in one reserved space (the vocalization panel and the narrator), stack them in a single grid cell rather than absolutely positioning both. Absolute children contribute no height, so longer copy overflows silently and no test catches it. In one grid cell the slot is at least its `min-height`, the reserved floor, and grows if the copy needs more. The floor is measured against the tallest real case plus headroom for one wrapped line: 420px desktop, 515px under 480px wide, checked at 320, 390, 768 and 1280. The slot holds every settled exchange as well as the newest one, so it grew when the visit became a conversation.
 
 Measure the floor by enumerating every state the screen can actually reach, never by pasting the longest line of each kind together. The naive method overstated the visitor close by 50px, 422 against a real 369 at 320 wide, and 50px of reserved space nobody can ever use is a hole in the composition on a phone.
 
@@ -46,7 +46,23 @@ The two numbers differ because the lines are not independent. A visitor close is
 
 When the reserved block is much taller than the panel that shares it, the panel is centered in the cell (`align-self: center`) so the space the close will need reads as breathing room rather than a hole. The acceptance test is not the height, it is that the lines above the slot do not move: sample the first arrival line's `top` before the click, all through the crossfade, and after.
 
-Re-measure whenever the copy changes, in both directions. Rewriting the close shortened the 320px worst case from 399 to 369, which retired a whole extra media query. A floor nobody rechecks only ever grows.
+Re-measure whenever the copy changes, in both directions, and whenever the composition changes at all. Rewriting the close shortened the 320px worst case from 399 to 369, which retired a whole extra media query. Showing the exchanges already past took it to 481, which put it back. A floor nobody rechecks only ever grows.
+
+## A repeated beat needs a changing composition
+
+Four exchanges of a visitor scene read as one frame reprinted, because the scene-setting lines were the largest thing on screen and stayed at full weight while the only thing that changed was the smallest. The fix was composition, not flow. Three rules came out of it and they apply to any beat that repeats.
+
+The scene-setting recedes once it has done its job. The arrival is the event on the first exchange, full size, full colour, both lines. From the second on it is context: one line, `--text-small`, `--ink-mute`. It never comes back.
+
+What has already happened stays on screen a step back. Each earlier exchange keeps one line dimmed behind a faint rail, so the player reads a visit accumulating rather than a screen redrawn, and the newest exchange is always the loudest thing present. The column is also the shape of the visit, which is what makes the arc line at the close land: the player can see the shape it names.
+
+Stacking copy makes it checkable, and copy that was true alone can become false in a column. The body lines lean on "still", "again" and "has not", which is right for the loud line, where the narrator above names one signal and the body has to speak for the whole visit. Put the same wording in a column and the player can read it against the line above: "she still has her eyes on you" directly under "she glances down the row" is simply a lie. A past exchange is a moment that happened, so the column uses the reaction wording and the loud line keeps the settled wording. Two readings of the same band, and which one is true depends on what is next to it.
+
+Runs collapse. When the visitor does not move between two answers the row repeats word for word, and four identical sentences is a render bug to anybody reading it whatever it is to the engine. One row per change. A visit where nothing moved is then one row, which is the truth said once.
+
+The way forward says where you are through wording. "and then", "the visit goes on", "a moment more", "the day goes on". Never a count, never a fraction, never the same twice in one visit.
+
+Watch what the receding is keyed on. Collapsing the arrival when the exchange history became non empty meant it sat at full height while the panel was up and collapsed the instant an answer landed, shifting the centered composition 26px on every single exchange. Key it on the visit being under way rather than on the answer arriving, so the collapse happens once and the crossfade moves nothing. The check is the same one as always: sample the first arrival line's `top` before the click, through the crossfade, and after.
 
 ## The control that ends a beat comes last
 

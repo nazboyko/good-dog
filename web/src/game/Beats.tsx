@@ -49,8 +49,6 @@ export function Visitor({
   const visitor = view.visitor;
   if (!visitor) return null;
   const answered = Boolean(visitor.signal);
-  // the visit is several exchanges, only the last one ends the scene
-  const lastExchange = visitor.exchange >= visitor.exchanges;
   // the close stages its lines, so the way forward waits for the last one
   const closing = Boolean(visitor.arc || visitor.parting);
   const stagger = closeStagger(prefersReducedMotion());
@@ -65,15 +63,28 @@ export function Visitor({
     const t = window.setTimeout(() => setReady(true), wait);
     return () => window.clearTimeout(t);
   }, [wait, visitor.exchange]);
-  // the panel and the narrator share one reserved slot: the panel fades
-  // out and the narrator fades in over it, nothing above them moves
+  // The visit is a conversation, not a screen that reprints itself.
+  // The arrival sets the scene once and then gets out of the way, every
+  // exchange so far stays visible a step further back, and the newest
+  // one is the loudest thing on the screen.
+  const settled = visitor.settled ?? [];
+  // the visit is under way from the second exchange on, answered or
+  // not. Keying this on turns alone meant the arrival was still at full
+  // height while the panel was up and then collapsed the instant an
+  // answer landed, shifting the whole centered composition by 26px at
+  // every exchange. It recedes once, after the first answer, and stays.
+  const opened = answered || visitor.exchange > 1;
   return (
     <section className="beat">
-      {visitor.arrival.map((line, i) => (
-        <p key={i} className="beat-line">
-          {line}
-        </p>
-      ))}
+      <div className={`arrival ${opened ? "is-context" : ""}`}>
+        {visitor.arrival.map((line, i) => (
+          // once the visit is under way the arrival is context, so only
+          // its first line stays: the rest is a room already described
+          <p key={i} className={`beat-line ${opened && i > 0 ? "arrival-dropped" : ""}`}>
+            {line}
+          </p>
+        ))}
+      </div>
       <div className="visitor-slot">
         <div
           className={`panel fade-quick ${answered ? "" : "is-shown"}`}
@@ -90,13 +101,22 @@ export function Visitor({
         <div className={`narrator fade ${answered ? "is-shown" : ""}`} aria-live="polite" aria-hidden={!answered}>
           {visitor.mismatch && (
             <>
-              <div className="narrator-lines">
-                <p className="narrator-meant">you meant: {visitor.mismatch.meant}</p>
-                <p className="narrator-heard">
-                  {visitor.heard_label}: {visitor.mismatch.heard}
-                </p>
+              {settled.length > 0 && (
+                <ol className="visit-settled">
+                  {settled.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ol>
+              )}
+              <div className="visit-now">
+                <div className="narrator-lines">
+                  <p className="narrator-meant">you meant: {visitor.mismatch.meant}</p>
+                  <p className="narrator-heard">
+                    {visitor.heard_label}: {visitor.mismatch.heard}
+                  </p>
+                </div>
+                <p className="beat-line">{visitor.body}</p>
               </div>
-              {visitor.body && <p className="beat-line">{visitor.body}</p>}
               {visitor.arc && (
                 <p className="beat-line beat-arc" style={{ animationDelay: `${stagger.arc}ms` }}>
                   {visitor.arc}
@@ -117,7 +137,7 @@ export function Visitor({
                 // subtree three times a visit
                 tabIndex={answered ? 0 : -1}
               >
-                {lastExchange ? "the day goes on" : "and then"}
+                {visitor.onward}
               </button>
             </>
           )}

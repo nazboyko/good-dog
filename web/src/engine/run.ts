@@ -66,6 +66,8 @@ export interface View {
     signal?: Vocalization;
     mismatch?: Mismatch;
     body?: string;
+    settled?: string[];
+    onward?: string;
     arc?: string;
     parting?: string;
   };

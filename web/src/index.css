@@ -338,12 +338,15 @@ html, body { overflow-x: hidden; }
    measured in the browser against every close the engine can actually
    reach (each visitor, each signal, each band, each shape) plus one
    wrapped line, so a whole four exchange visit never shifts the
-   composition. Measured worst: 295 desktop and tablet, 372 at 390px,
-   369 at 320px, so two steps cover every width. */
+   composition. The slot now holds the exchanges already past as well as
+   the newest one, so a close is taller than it was: measured worst 384
+   desktop and tablet, 461 at 390px, 481 at 320px. The column is
+   reaction wording, which wraps more than the settled wording it
+   replaced, so 320 got taller while 390 did not. */
 .visitor-slot {
   display: grid;
   margin-top: 8px;
-  min-height: 330px;
+  min-height: 420px;
 }
 
 .visitor-slot > * { grid-area: 1 / 1; align-self: start; }
@@ -351,6 +354,53 @@ html, body { overflow-x: hidden; }
 /* the panel sits in the middle of the reserved block, so the space the
    close will need reads as breathing room and not as a hole */
 .visitor-slot .panel { align-self: center; }
+
+/* ---- the visit as a conversation ---- */
+
+/* The arrival sets the scene and then stops being the event. Once the
+   first answer lands it drops to context weight: smaller, dimmer, and
+   down to a single line, because the room only needs describing once
+   and the loudest thing on screen should be what just happened. */
+.arrival { transition: opacity var(--fade-quiet) ease; }
+
+.arrival.is-context .beat-line {
+  font-size: var(--text-small);
+  line-height: 1.45;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+}
+
+/* reserved space plus fade applies here too: the dropped line keeps its
+   box while it goes, so nothing under it jumps up a step */
+.arrival-dropped {
+  opacity: 0;
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+  transition: opacity var(--fade-quick) ease, height var(--fade-quiet) ease, margin var(--fade-quiet) ease;
+}
+
+/* Exchanges that have already happened stay on screen a step back, so
+   the player reads a visit accumulating rather than one frame redrawn.
+   One line each, the body: what the visitor did is the part worth
+   keeping, and four of those in a column is the shape of the visit. */
+.visit-settled {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  border-left: 2px solid var(--raised);
+  padding-left: 12px;
+}
+
+.visit-settled li {
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--ink-mute);
+  margin: 0 0 4px;
+}
+
+/* the one that just happened, at full weight, always the loudest */
+.visit-now { animation: settle 900ms ease-out both; }
 
 /* the rail marks the narrator's two lines only. what the visitor's body
    does is consequence, not commentary, so it sits outside the quote */
@@ -531,7 +581,7 @@ html, body { overflow-x: hidden; }
 @media (max-width: 480px) {
   .run { padding-top: 16px; padding-bottom: 16px; }
   .panel { grid-template-columns: repeat(2, 1fr); }
-  .visitor-slot { min-height: 405px; }
+  .visitor-slot { min-height: 515px; }
   .reveal-photo { max-height: 42vh; max-height: 42dvh; }
   .about-facts { grid-template-columns: 1fr; gap: 2px 0; }
   .about-facts dt { padding-top: 8px; }

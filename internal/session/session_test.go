@@ -600,3 +600,105 @@ func TestNarratorAndBodyNeverContradict(t *testing.T) {
 		}
 	}
 }
+
+// The visitor screen has to read as a conversation growing, not the
+// same frame reprinted, so the view carries the exchanges already past.
+//
+// The first version of this test named that rule in its comment and
+// then asserted only that four answers produced four entries, which the
+// code would satisfy by printing one sentence four times. It did. The
+// assertions below are the ones the comment was always promising.
+func TestTheVisitCarriesTheExchangesAlreadyPast(t *testing.T) {
+	s := newTestSession()
+	s.Advance()
+	s.Advance()
+	if s.Beat() != BeatVisitor {
+		t.Fatalf("setup: %s", s.Beat())
+	}
+	said := []Vocalization{Silence, Howl, Whine, LowGrowl}
+	for i, v := range said {
+		if err := s.Vocalize(v); err != nil {
+			t.Fatal(err)
+		}
+		vv := s.View(t0).Visitor
+		if vv == nil {
+			t.Fatal("no visitor on the view")
+		}
+		// the column holds what is already past, never the loud line
+		if len(vv.Settled) > i {
+			t.Errorf("after %d answers the column shows %d rows", i+1, len(vv.Settled))
+		}
+		for _, row := range vv.Settled {
+			if row == vv.Body {
+				t.Errorf("the loud line is repeated in the column: %q", row)
+			}
+			// the column is moments, so it never claims continuity
+			for _, claim := range []string{"still", "again", "has not"} {
+				if strings.Contains(strings.ToLower(row), claim) {
+					t.Errorf("a past exchange claims continuity with %q: %s", claim, row)
+				}
+			}
+		}
+		// no two rows in a row say the same thing
+		for j := 1; j < len(vv.Settled); j++ {
+			if vv.Settled[j] == vv.Settled[j-1] {
+				t.Errorf("the column repeats itself at row %d: %q", j, vv.Settled[j])
+			}
+		}
+		if i < len(said)-1 {
+			if err := s.Advance(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+// A visit where the visitor never moves is a real visit, and the column
+// says so once rather than four times.
+func TestAVisitThatNeverMovesSaysSoOnce(t *testing.T) {
+	s := newTestSession()
+	s.Advance()
+	s.Advance()
+	// alert bark is worth nothing to either archetype, so the band holds
+	for i := 0; i < visitor.ExchangesPerScene; i++ {
+		if err := s.Vocalize(AlertBark); err != nil {
+			t.Fatal(err)
+		}
+		if i < visitor.ExchangesPerScene-1 {
+			if err := s.Advance(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	settled := s.View(t0).Visitor.Settled
+	if len(settled) != 1 {
+		t.Errorf("a visit that never moved should be one row, got %d: %v", len(settled), settled)
+	}
+}
+
+// The way forward is different on every beat, so no two exchanges read
+// as the same screen.
+func TestTheWayForwardChangesEveryExchange(t *testing.T) {
+	s := newTestSession()
+	s.Advance()
+	s.Advance()
+	seen := map[string]bool{}
+	for i := 0; i < visitor.ExchangesPerScene; i++ {
+		if err := s.Vocalize(Silence); err != nil {
+			t.Fatal(err)
+		}
+		onward := s.View(t0).Visitor.Onward
+		if onward == "" {
+			t.Fatalf("exchange %d has no way forward", i+1)
+		}
+		if seen[onward] {
+			t.Errorf("exchange %d repeats an earlier label: %q", i+1, onward)
+		}
+		seen[onward] = true
+		if i < visitor.ExchangesPerScene-1 {
+			if err := s.Advance(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}

@@ -209,15 +209,51 @@ var settledTemplates = map[Band]string{
 	BandClose:    "{They} has not taken {their} hand off the gate.",
 }
 
-// Body is what the player sees the visitor doing after the answers so
-// far. The first answer gets a reaction to itself, every answer after
-// that gets where the visit now stands.
+// Body is the loud line under the narrator: what the visitor is doing
+// after the answers so far. The first answer gets a reaction to itself,
+// every answer after that gets where the visit now stands, because the
+// narrator above it names one signal and this has to speak for four.
 func Body(a Archetype, signals []Signal) string {
 	b := bandFor(comfort(a, signals))
 	if len(signals) <= 1 {
 		return a.render(bodyTemplates, b)
 	}
 	return a.render(settledTemplates, b)
+}
+
+// Moment is how one exchange read at the time, for the column of
+// exchanges already past.
+//
+// It is the reaction wording, never the settled wording, and that is
+// the whole point. "Still" and "again" are claims about the line above,
+// and once the visit is stacked on screen the player can check them: a
+// row saying she still has her eyes on you, directly under a row saying
+// she glanced down the row, is simply false. A past exchange is a
+// moment that happened, so it is written as one.
+func Moment(a Archetype, signals []Signal) string {
+	return a.render(bodyTemplates, bandFor(comfort(a, signals)))
+}
+
+// Settled is the visit so far as the player can still see it, oldest
+// first and not including the answer that just landed.
+//
+// Runs of the same reading collapse to one row. A visit where the
+// visitor did not move is a real thing and the game should say so, but
+// it says it once: four identical sentences in a column is a render
+// bug to anybody reading it, whatever it is to the engine.
+func Settled(a Archetype, signals []Signal) []string {
+	if len(signals) < 2 {
+		return nil
+	}
+	var out []string
+	for i := range signals[:len(signals)-1] {
+		line := Moment(a, signals[:i+1])
+		if len(out) > 0 && out[len(out)-1] == line {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 // render fills one band's line, or nothing at all for a band that has
@@ -301,6 +337,41 @@ func parting(a Archetype, o Outcome, b Band) string {
 	}
 }
 
+// onwardLabels are what the button says between exchanges. The visit
+// has a shape and the player should feel where they are in it without
+// being given a count: a scene that says "2 of 4" is a form, not an
+// afternoon. Each label is different, so no two beats read the same.
+// "a moment more" was a count in prose: a moment is a unit and more is
+// a remainder, so at the third beat of four it resolves to "one more".
+// "the visit goes on" shared its frame with the closer and spent the
+// ending early, and a visit is a scene name rather than something a dog
+// lives inside. What is left is two weightless connectives and then the
+// game noticing she has stayed.
+var onwardLabels = []string{
+	"and then",
+	"and again",
+	"still at the gate",
+}
+
+// Onward is the label for leaving exchange nth of total, counting from
+// one. The last exchange ends the visit and says so.
+func Onward(nth, total int) string {
+	if nth >= total {
+		return "the day goes on"
+	}
+	if nth < 1 {
+		nth = 1
+	}
+	if nth-1 < len(onwardLabels) {
+		return onwardLabels[nth-1]
+	}
+	// a scene is four to eight beats in the design, so a longer visit
+	// than the labels cover falls back to the one label that can repeat
+	// honestly. "still at the gate" three beats running would promise
+	// something, "and again" only says the visit did not stop.
+	return onwardLabels[1]
+}
+
 // Ending is everything the close of a visit leaves behind.
 type Ending struct {
 	Outcome Outcome
@@ -382,12 +453,14 @@ func rungOf(b Band) int {
 // None of them names a rung. "Drifting" and "close" are band words, and
 // an arc that borrows one claims a position the visit may never have
 // touched. Turned covers a visit that went up and came back as well as
-// one that went down and came back, so it says neither.
+// one that went down and came back, so it says neither. It also no
+// longer says "once" or "in the middle": the column of exchanges is now
+// on screen underneath it, so both were claims a player could count.
 var arcLines = map[Shape]string{
 	ShapeWarmed: "{They} {is} closer now than when {they} stopped.",
 	ShapeCooled: "{They} {is} further off now than when {they} stopped.",
 	ShapeSteady: "{They} {is} no closer and no further than when {they} stopped.",
-	ShapeTurned: "{They} moves once in the middle and ends where {they} started.",
+	ShapeTurned: "{They} moves and comes back to where {they} started.",
 }
 
 // arcLine renders the shape for this visitor.
