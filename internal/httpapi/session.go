@@ -21,7 +21,9 @@ import (
 type Sessions struct {
 	provider animal.Provider
 	compiler *dogsheet.Compiler
-	store    *session.Store
+	// the host's recordings, read only at play time
+	voice radio.VoiceCache
+	store *session.Store
 	// rails is which run new sessions start on, short for the playtest
 	rails session.Rails
 	// firstDog pins the playtest dog, empty means random from the pool
@@ -33,6 +35,14 @@ type Sessions struct {
 func NewSessions(provider animal.Provider, compiler *dogsheet.Compiler, db *session.DB, rails session.Rails, firstDog string) *Sessions {
 	h := &Sessions{provider: provider, compiler: compiler, rails: rails, firstDog: firstDog, now: time.Now}
 	h.store = session.NewStore(db, h.rebuild)
+	return h
+}
+
+// WithVoice gives the host his recordings. Optional: without it the
+// night still plays, in text, which is the same night a player with the
+// sound off gets anyway.
+func (h *Sessions) WithVoice(vc radio.VoiceCache) *Sessions {
+	h.voice = vc
 	return h
 }
 
@@ -95,7 +105,14 @@ func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []str
 	// no cap here: Neighbours still has to drop duplicate names and
 	// default sheets, and capping the candidates first meant one
 	// duplicate inside the first three left the night a story short
-	return radio.Broadcast(radio.Neighbours(candidates, playing, playing.OrgID), own)
+	cues, missing := radio.WithVoices(
+		radio.Broadcast(radio.Neighbours(candidates, playing, playing.OrgID), own), h.voice)
+	if len(missing) > 0 {
+		// prepared at boot, so a miss here means the cache moved under us
+		log.Printf("radio: %d host lines have no recording, tonight is quieter than it should be: %v",
+			len(missing), missing)
+	}
+	return cues
 }
 
 // Tonight is the Nightly side of the stream: what this session's night

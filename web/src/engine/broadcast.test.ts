@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { listen, STREAM_GRACE_MS, type EventSourceLike, type RadioCue } from "./broadcast";
+import { listen, play, STREAM_GRACE_MS, type EventSourceLike, type RadioCue } from "./broadcast";
 
 const cues: RadioCue[] = [
   { at_ms: 100, speaker: "ranger", line: "Shelter radio, and it is late." },
@@ -135,5 +135,50 @@ test("a night with no cues still settles instead of hanging", () => {
   const fake = fakeSource();
   listen("abc", [], { onCue: () => {}, onDone: () => (done = true) }, () => fake.source);
   vi.advanceTimersByTime(STREAM_GRACE_MS + 500);
+  expect(done).toBe(true);
+});
+
+// Sound is on top of the night, never the night itself. Some judges
+// will watch with the sound off, and every one of these paths has to
+// land in the same place: the line is on screen and the night goes on.
+test("audio never blocks a line from playing", () => {
+  const made: string[] = [];
+  const withAudio: RadioCue = { at_ms: 0, speaker: "ranger", line: "Shelter radio.", audio: "/api/audio/x.mp3" };
+  const silent: RadioCue = { at_ms: 0, speaker: "story", line: "That is Bella." };
+
+  // a cue with no recording asks for nothing
+  play(silent, (src) => { made.push(src); return {} as HTMLAudioElement; });
+  expect(made).toEqual([]);
+
+  // a cue with one plays it
+  play(withAudio, (src) => { made.push(src); return { play: () => Promise.resolve() } as unknown as HTMLAudioElement; });
+  expect(made).toEqual(["/api/audio/x.mp3"]);
+
+  // autoplay refused: a rejected promise must not throw at the caller
+  expect(() =>
+    play(withAudio, () => ({ play: () => Promise.reject(new Error("NotAllowedError")) }) as unknown as HTMLAudioElement),
+  ).not.toThrow();
+
+  // no Audio at all, or a constructor that throws
+  expect(() => play(withAudio, () => { throw new Error("no audio here"); })).not.toThrow();
+
+  // an element with no play method at all
+  expect(() => play(withAudio, () => ({}) as HTMLAudioElement)).not.toThrow();
+});
+
+// The whole night still runs when every recording is missing, which is
+// the same night a player with the sound off gets.
+test("a night with no recordings plays every line", () => {
+  const silentCues: RadioCue[] = cues.map((c) => ({ ...c, audio: undefined }));
+  const played: number[] = [];
+  let done = false;
+  const fake = fakeSource();
+  listen("abc", silentCues, { onCue: (i) => played.push(i), onDone: () => (done = true) }, () => fake.source);
+  fake.emit("hello");
+  fake.emit("radio", { index: 0 });
+  fake.emit("radio", { index: 1 });
+  fake.emit("radio", { index: 2 });
+  fake.emit("radio_done");
+  expect(played).toEqual([0, 1, 2]);
   expect(done).toBe(true);
 });

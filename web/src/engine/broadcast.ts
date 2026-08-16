@@ -9,7 +9,25 @@ export type RadioCue = {
   at_ms: number;
   speaker: "ranger" | "story";
   line: string;
+  // the recording of this line, absent when there is none
+  audio?: string;
 };
+
+// play starts a cue's recording if it has one. It never blocks the night
+// and it never reports failure upward, because the subtitle is the night
+// and the voice is on top of it: a browser that refuses to autoplay, a
+// muted tab, a missing file and a judge watching with the sound off all
+// have to land in exactly the same place, which is a night that reads.
+export function play(cue: RadioCue, make: (src: string) => HTMLAudioElement = (src) => new Audio(src)): void {
+  if (!cue.audio) return;
+  try {
+    const sound = make(cue.audio);
+    // a promise rejection here is the autoplay policy, not an error
+    void sound.play?.()?.catch?.(() => {});
+  } catch {
+    // no Audio in this environment, the line still shows
+  }
+}
 
 // How long to wait for the stream to say anything before deciding it is
 // not going to. The server sends hello the instant it accepts the

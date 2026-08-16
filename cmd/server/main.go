@@ -14,6 +14,7 @@ import (
 	"github.com/nazboyko/good-dog/internal/elevenlabs"
 	"github.com/nazboyko/good-dog/internal/gemini"
 	"github.com/nazboyko/good-dog/internal/httpapi"
+	"github.com/nazboyko/good-dog/internal/radio"
 	"github.com/nazboyko/good-dog/internal/session"
 )
 
@@ -78,6 +79,27 @@ func main() {
 	}
 	// Venus first for the playtest, unset FIRST_DOG for the pool
 	sessions := httpapi.NewSessions(provider, compiler, sessionDB, rails, os.Getenv("FIRST_DOG"))
+
+	// Ranger's voice, prepared before the door opens. The host says the
+	// same three lines every night, so this is a one time cost that a
+	// warm cache turns into nothing. Nothing is ever synthesized while a
+	// player is listening: see internal/radio/voice.go.
+	if elevenClient != nil {
+		host := httpapi.NewHostVoice(ttsCache, elevenClient, &elevenlabs.Budget{},
+			elevenlabs.DefaultVoiceID, elevenlabs.VoiceSettings{Stability: 0.5, SimilarityBoost: 0.75})
+		if report, err := radio.Prepare(context.Background(), host); err != nil {
+			log.Printf("radio: host voice not ready, tonight is text only: %v", err)
+		} else {
+			log.Print(report)
+			if missing := radio.Missing(host); len(missing) > 0 {
+				log.Printf("radio: %d host lines still missing after preparation: %v", len(missing), missing)
+			} else {
+				sessions = sessions.WithVoice(host)
+			}
+		}
+	} else {
+		log.Print("radio: no speech key, tonight is text only")
+	}
 
 	mux := http.NewServeMux()
 	sessions.Register(mux)

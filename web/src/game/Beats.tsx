@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { View, Vocalization } from "../engine/run";
 import { VOCALIZATION_LABELS, closeStagger, prefersReducedMotion } from "../engine/run";
-import { listen } from "../engine/broadcast";
+import { listen, play } from "../engine/broadcast";
 import { forDisplay } from "../engine/display";
 
 // One small component per beat. Presentation only: the engine decides
@@ -146,7 +146,12 @@ export function Night({ view, onNext, busy }: { view: View; onNext: () => void; 
     return listen(view.session_id, cues, {
       // cues arrive in order and never twice, so the count is the
       // highest index heard plus one
-      onCue: (i) => setHeard((n) => Math.max(n, i + 1)),
+      onCue: (i) => {
+        // the line goes up first, then the voice on top of it, so the
+        // night reads the same with the sound off
+        setHeard((n) => Math.max(n, i + 1));
+        play(cues[i]);
+      },
       onDone: () => setOver(true),
     });
     // the broadcast belongs to this session's night, nothing else restarts it

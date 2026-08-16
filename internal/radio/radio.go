@@ -38,6 +38,10 @@ type Cue struct {
 	At      time.Duration
 	Speaker Speaker
 	Line    string
+	// Audio is the file this line is read from, empty when there is no
+	// recording. Empty is a quiet cue, never a reason to skip the line:
+	// the text is the night and the voice is on top of it.
+	Audio string
 }
 
 // MarshalJSON writes the offset in milliseconds, because that is what
@@ -50,7 +54,8 @@ func (c Cue) MarshalJSON() ([]byte, error) {
 		At      int64   `json:"at_ms"`
 		Speaker Speaker `json:"speaker"`
 		Line    string  `json:"line"`
-	}{c.At.Milliseconds(), c.Speaker, c.Line})
+		Audio   string  `json:"audio,omitempty"`
+	}{c.At.Milliseconds(), c.Speaker, c.Line, c.Audio})
 }
 
 // Neighbour is a real dog in the pool with its compiled sheet and the
@@ -68,6 +73,22 @@ const (
 	betweenL = 2200 * time.Millisecond
 	beforeUp = 2400 * time.Millisecond
 )
+
+// The host's lines. Fixed strings, the same every night, which is what
+// lets the whole spoken half of the radio be prepared once and read off
+// a disk cache forever after. Nothing here names a dog: the moment a
+// host line took a name it would be per dog and could not be a constant.
+const (
+	HostOpen    = "Shelter radio, and it is late."
+	HostWhoIsUp = "Lights are down. Here is who is still awake."
+	HostClose   = "That is everyone tonight. Sleep if you can."
+)
+
+// HostLines is every line Ranger says, in the order he says them. This
+// is the set that has to exist in the cache before a night can start.
+func HostLines() []string {
+	return []string{HostOpen, HostWhoIsUp, HostClose}
+}
 
 // Stories is how many neighbours one night holds. Three is the number
 // the plan falls back to when the evening runs short, so it is the
@@ -92,9 +113,9 @@ func Broadcast(neighbours []Neighbour, own []string) []Cue {
 		at += betweenL
 	}
 
-	add(SpeakerRanger, "Shelter radio, and it is late.")
+	add(SpeakerRanger, HostOpen)
 	at += afterOne - betweenL
-	add(SpeakerRanger, "Lights are down. Here is who is still awake.")
+	add(SpeakerRanger, HostWhoIsUp)
 
 	for i, n := range neighbours {
 		if i >= Stories {
@@ -117,7 +138,7 @@ func Broadcast(neighbours []Neighbour, own []string) []Cue {
 	}
 
 	at += beforeUp - betweenL
-	add(SpeakerRanger, "That is everyone tonight. Sleep if you can.")
+	add(SpeakerRanger, HostClose)
 	return cues
 }
 
