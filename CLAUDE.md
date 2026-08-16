@@ -31,6 +31,8 @@ A check that shares its source with the thing it checks is not a check. Every ac
 
 Every new guard is mutation-checked before the unit ships. Put back the bug it exists for, watch it fail, take the bug out again. A guard that has never been seen to fail has not been shown to work. This is not optional and it is not only for tests: runtime acceptance checks count too.
 
+Test fixtures are produced by the real path, never hand written to look like it. Marshal the real struct, build the scene the engine builds, take the pair the game can actually reach. A fixture written by hand is written by the same understanding that wrote the bug, so it agrees with the bug and the test passes. Three of one day's defects hid behind exactly that: a scene of four identical answers where the two lines being compared can never disagree, an outcome paired with a band the game cannot produce together, and a duration hand typed as a small number where the real serialization emits nanoseconds.
+
 The way back from a mutation is a file copy. Copy the file aside, mutate it, run, copy it back. Never `git checkout` over a path or a directory to clean up: an uncommitted unit lives only in the working tree and checkout deletes all of it, not just the mutation. This has already destroyed a finished unit once.
 
 Use the /ship command to run gates 1 and 2 and commit.
