@@ -1,0 +1,39 @@
+# GOOD DOG on Fly.
+#
+# One machine, always on. The radio is a live SSE stream and the night
+# is paced by the server, so a machine that suspends between requests
+# would drop a broadcast mid sentence. See the trap table in
+# docs/tech-stack.md: SSE plus Fly auto stop kills the radio at night.
+
+app = "good-dog"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  # the three day run, not the playtest rails
+  RUN_RAILS = "full"
+  # sqlite and anything else that changes lives on the volume
+  DATA_DIR = "/data"
+
+[[mounts]]
+  source = "gooddog_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # no compression on the event stream: gzip buffers it and the client
+  # sits in silence waiting for a flush that never comes
+  [http_service.http_options.response]
+    pristine = true
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

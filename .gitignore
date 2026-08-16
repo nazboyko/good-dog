@@ -9,3 +9,10 @@ web/dist/
 .DS_Store
 .idea/
 .vscode/
+
+# the embedded frontend is a build artifact: the Dockerfile runs the
+# vite build into it, and make embed puts it there for a local run
+internal/webui/dist/
+
+# the built binary
+bin/

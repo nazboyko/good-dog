@@ -21,3 +21,23 @@ voices:
 # What it would cost, without spending anything.
 voices-dry:
 	go run ./cmd/prepvoices -dry-run
+
+# Build the frontend into the place the binary embeds it. The Dockerfile
+# does the same thing; this is for running the real single binary
+# locally, which is the only way to test what actually deploys.
+embed:
+	cd web && npm ci --silent && npm run build
+	rm -rf internal/webui/dist
+	cp -r web/dist internal/webui/dist
+
+# One binary with the game, the api, the stream and the audio in it.
+build: embed
+	go build -o bin/good-dog ./cmd/server
+
+# Refuse to ship an empty page. A deploy that embeds nothing still
+# builds, still boots and still answers 200, which is the worst way to
+# find out.
+embed-check:
+	@test -f internal/webui/dist/index.html || (echo "internal/webui/dist is empty, run make embed" && exit 1)
+	@ls internal/webui/dist/assets/*.js >/dev/null 2>&1 || (echo "no js bundle embedded" && exit 1)
+	@echo "embedded: $$(du -sh internal/webui/dist | cut -f1) of frontend"

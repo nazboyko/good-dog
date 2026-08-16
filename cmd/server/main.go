@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/nazboyko/good-dog/internal/animal"
@@ -17,6 +18,7 @@ import (
 	"github.com/nazboyko/good-dog/internal/httpapi"
 	"github.com/nazboyko/good-dog/internal/radio"
 	"github.com/nazboyko/good-dog/internal/session"
+	"github.com/nazboyko/good-dog/internal/webui"
 )
 
 // a life untouched this long is over, the row is purged at startup
@@ -80,7 +82,19 @@ func main() {
 	compiler := dogsheet.NewCompiler(llm, dogsheet.NewCache("cache/sheets"))
 	// sessions survive a restart: sqlite is the truth, the store caches it.
 	// A life left open for days is not resumed, the player gets a clean one.
-	sessionDB, err := session.OpenDB("cache/sessions.db")
+	// The only thing that changes at runtime is the sessions database,
+	// so it is the only thing that needs the volume. Everything else the
+	// game reads, the recordings, the sheets, the photos and the
+	// fixtures, is baked into the image: deterministic, and a judge
+	// hears the night on a machine that has never recorded anything.
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "cache"
+	}
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		log.Fatalf("cannot write to %s: %v", dataDir, err)
+	}
+	sessionDB, err := session.OpenDB(filepath.Join(dataDir, "sessions.db"))
 	if err != nil {
 		log.Fatalf("open sessions db: %v", err)
 	}
@@ -126,6 +140,14 @@ func main() {
 	mux.HandleFunc("GET /api/spike/gemini", httpapi.SpikeGemini(geminiClient))
 	mux.HandleFunc("GET /api/spike/tts", httpapi.SpikeTTS(elevenClient, ttsCache, &elevenlabs.Budget{}))
 	mux.HandleFunc("GET /api/spike/subscription", httpapi.SpikeSubscription(elevenClient))
+
+	// the game itself, served out of this binary. Registered last and on
+	// the bare root so every /api and /events route above wins.
+	ui, err := webui.Handler()
+	if err != nil {
+		log.Fatalf("the frontend is not built into this binary: %v", err)
+	}
+	mux.Handle("/", ui)
 
 	log.Printf("listening on :%s", port)
 	if err := http.Serve(listener, mux); err != nil {

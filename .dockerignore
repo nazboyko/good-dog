@@ -1,0 +1,15 @@
+# the image builds the frontend itself
+web/node_modules
+web/dist
+internal/webui/dist
+
+# the volume owns these, not the image
+cache/sessions.db
+cache/sessions.db-shm
+cache/sessions.db-wal
+
+bin
+.git
+.idea
+.vscode
+.env
