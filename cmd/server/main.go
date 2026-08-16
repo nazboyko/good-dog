@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -29,6 +30,22 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+
+	// Take the port before doing anything else.
+	//
+	// ListenAndServe at the bottom of main means a stale process holding
+	// the port is the last line of a startup log that otherwise looks
+	// completely healthy: the preflight passes, the voice reports ready,
+	// and then the process dies while the old binary keeps answering.
+	// Every symptom after that belongs to code that is not running. That
+	// cost an hour, four times, in two days.
+	//
+	// Failing here makes it the first line instead of the last.
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		log.Fatalf("cannot take port %s, something else is already on it: %v", port, err)
+	}
+	log.Printf("holding :%s, starting up", port)
 
 	var geminiClient *gemini.Client
 	if key := os.Getenv("GEMINI_API_KEY"); key != "" {
@@ -111,7 +128,7 @@ func main() {
 	mux.HandleFunc("GET /api/spike/subscription", httpapi.SpikeSubscription(elevenClient))
 
 	log.Printf("listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	if err := http.Serve(listener, mux); err != nil {
 		log.Fatal(err)
 	}
 }
