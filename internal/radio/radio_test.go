@@ -36,7 +36,7 @@ func testPool() []Neighbour {
 // has been living in it all day.
 func TestOnlyTheOwnStoryMayNameTheReveal(t *testing.T) {
 	own := []string{"Here is Venus.", "She is real, and she is still here."}
-	cues := Broadcast(testPool(), own)
+	cues := Broadcast(testPool(), own, Ranger)
 	var ownCues, otherCues int
 	for _, c := range cues {
 		if strings.Contains(c.Line, "is real") {
@@ -85,7 +85,7 @@ func contains(list []string, s string) bool {
 // A neighbour story that says a neighbour is real, or still waiting,
 // spends that beat early and on the wrong animal.
 func TestNeighbourStoriesNeverReachForTheReveal(t *testing.T) {
-	cues := Broadcast(testPool(), nil)
+	cues := Broadcast(testPool(), nil, Ranger)
 	forbidden := []string{
 		"is real", "are real", "still here", "still waiting", "waiting for you",
 		"adopt", "forever home", "take him home", "take her home", "could be yours",
@@ -107,12 +107,17 @@ func TestNeighbourStoriesNeverReachForTheReveal(t *testing.T) {
 // and then it stops.
 func TestEveryStoryEndsOnARealNameAndPlace(t *testing.T) {
 	pool := testPool()
-	cues := Broadcast(pool, nil)
+	cues := Broadcast(pool, nil, Ranger)
 	for _, n := range pool {
+		// the naming line is the host's now: a dog announcing its own
+		// name and shelter in the third person is a station ident
 		var last string
 		for _, c := range cues {
-			if c.Speaker == SpeakerStory && strings.Contains(c.Line, n.Dog.Name) {
+			if strings.Contains(c.Line, n.Dog.Name) {
 				last = c.Line
+				if c.Speaker != SpeakerRanger {
+					t.Errorf("%s names themselves, that is the host's line: %s", n.Dog.Name, c.Line)
+				}
 			}
 		}
 		if last == "" {
@@ -132,7 +137,7 @@ func TestEveryStoryEndsOnARealNameAndPlace(t *testing.T) {
 }
 
 func TestCuesOnlyEverMoveForward(t *testing.T) {
-	cues := Broadcast(testPool(), []string{"Here is Venus.", "She is real, and she is still here."})
+	cues := Broadcast(testPool(), []string{"Here is Venus.", "She is real, and she is still here."}, Ranger)
 	if len(cues) < 8 {
 		t.Fatalf("a night with three dogs is more than %d cues", len(cues))
 	}
@@ -193,8 +198,8 @@ func TestDefaultSheetsAreNotBroadcast(t *testing.T) {
 
 func TestBroadcastIsPure(t *testing.T) {
 	pool := testPool()
-	a := Broadcast(pool, nil)
-	b := Broadcast(pool, nil)
+	a := Broadcast(pool, nil, Ranger)
+	b := Broadcast(pool, nil, Ranger)
 	if len(a) != len(b) {
 		t.Fatalf("two runs gave %d and %d cues", len(a), len(b))
 	}
@@ -217,7 +222,7 @@ func TestBroadcastIsPure(t *testing.T) {
 // to cover the fallback used hand written small numbers and could not
 // see this, so the check has to be against the real serialization.
 func TestCuesSerializeTheirOffsetInMilliseconds(t *testing.T) {
-	cues := Broadcast(testPool(), nil)
+	cues := Broadcast(testPool(), nil, Ranger)
 	raw, err := json.Marshal(cues)
 	if err != nil {
 		t.Fatal(err)
@@ -271,7 +276,7 @@ func TestOneNightNeverNamesTheSameDogTwice(t *testing.T) {
 // neighbours are chosen from other shelters precisely so their naming
 // line does not give away the player's, and the frame has to agree.
 func TestTheHostNeverClaimsOneBuilding(t *testing.T) {
-	for _, c := range Broadcast(testPool(), nil) {
+	for _, c := range Broadcast(testPool(), nil, Ranger) {
 		if c.Speaker != SpeakerRanger {
 			continue
 		}
@@ -288,10 +293,12 @@ func TestTheHostNeverClaimsOneBuilding(t *testing.T) {
 // pushed the naming beat to fourth in a queue and it landed flat.
 func TestTheOwnSegmentIsAnnouncedOnce(t *testing.T) {
 	own := []string{"This one is for the dog in the third kennel down.", "Her name is Venus."}
-	cues := Broadcast(testPool(), own)
+	cues := Broadcast(testPool(), own, Ranger)
+	// everything about a neighbour, the dog's line and the host naming
+	// them, counts as the neighbour segment
 	lastNeighbour, firstOwn := -1, -1
 	for i, c := range cues {
-		if c.Speaker == SpeakerStory && !contains(own, c.Line) {
+		if !contains(own, c.Line) && c.Line != HostOpen && c.Line != HostWhoIsUp && c.Line != HostClose {
 			lastNeighbour = i
 		}
 		if contains(own, c.Line) && firstOwn < 0 {
@@ -312,7 +319,7 @@ func TestTheOwnSegmentIsAnnouncedOnce(t *testing.T) {
 func TestEveryLineIsAFinishedSentence(t *testing.T) {
 	pool := testPool()
 	pool[0].Sheet.Quirks[0].Value = "Sleeps with one paw over his nose"
-	for _, c := range Broadcast(pool, nil) {
+	for _, c := range Broadcast(pool, nil, Ranger) {
 		if !strings.HasSuffix(c.Line, ".") && !strings.HasSuffix(c.Line, "?") {
 			t.Errorf("%s cue is a fragment: %q", c.Speaker, c.Line)
 		}
@@ -324,7 +331,7 @@ func TestEveryLineIsAFinishedSentence(t *testing.T) {
 func TestNeighbourStoriesDoNotReadTheListingBlurb(t *testing.T) {
 	pool := testPool()
 	pool[0].Sheet.RadioSeed.Value = "Meet Keno, a resilient three-legged hound mix whose boundless energy shines."
-	for _, c := range Broadcast(pool, nil) {
+	for _, c := range Broadcast(pool, nil, Ranger) {
 		if strings.Contains(c.Line, "Meet ") || strings.Contains(c.Line, "resilient") {
 			t.Errorf("a listing blurb reached the radio: %s", c.Line)
 		}
@@ -365,7 +372,7 @@ func TestTheNightSpreadsAcrossSheltersWhenItCan(t *testing.T) {
 // ends on them.
 func TestTheOwnSegmentIsMarkedSoItCanStay(t *testing.T) {
 	own := []string{"Her name is Venus.", "She is real, and she is still here."}
-	cues := Broadcast(testPool(), own)
+	cues := Broadcast(testPool(), own, Ranger)
 
 	var ownCues, neighbourCues int
 	for _, c := range cues {
@@ -382,8 +389,10 @@ func TestTheOwnSegmentIsMarkedSoItCanStay(t *testing.T) {
 			}
 		}
 	}
-	if ownCues != len(own) {
-		t.Errorf("marked %d own lines, want %d", ownCues, len(own))
+	// the session writes the host's introduction first, so every own
+	// line but that one is the dog's
+	if ownCues != len(own)-1 {
+		t.Errorf("marked %d own lines, want %d", ownCues, len(own)-1)
 	}
 	if neighbourCues == 0 {
 		t.Error("the neighbours are the lines that roll past, there must be some")
@@ -400,7 +409,7 @@ func TestTheOwnSegmentIsMarkedSoItCanStay(t *testing.T) {
 		}
 	}
 	// and a night with no own segment marks nothing own
-	for _, c := range Broadcast(testPool(), nil) {
+	for _, c := range Broadcast(testPool(), nil, Ranger) {
 		if c.Speaker == SpeakerOwn {
 			t.Errorf("no own story was given, yet a line is marked own: %s", c.Line)
 		}

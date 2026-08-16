@@ -23,10 +23,13 @@ import (
 // tested without one.
 type VoiceCache interface {
 	// Lookup finds an already prepared recording. No network, no cost.
-	Lookup(text string) (file string, ok bool)
+	// Keyed by the voice as well as the text: the same sentence read by
+	// the host and by a dog are two different recordings.
+	Lookup(text string, v Voice) (file string, ok bool)
 	// Store synthesizes and caches one line, returning the file and the
-	// characters it cost. Only ever called from Prepare.
-	Store(ctx context.Context, text string) (file string, chars int, err error)
+	// characters it cost. Only ever called from preparation, never from
+	// a night in progress.
+	Store(ctx context.Context, text string, v Voice) (file string, chars int, err error)
 }
 
 // Prepared is what one preparation run did, for the log and for the
@@ -54,12 +57,12 @@ func Prepare(ctx context.Context, vc VoiceCache) (Prepared, error) {
 	out := Prepared{Files: map[string]string{}}
 	for _, line := range HostLines() {
 		out.Lines++
-		if file, ok := vc.Lookup(line); ok {
+		if file, ok := vc.Lookup(line, Ranger); ok {
 			out.AlreadyIn++
 			out.Files[line] = file
 			continue
 		}
-		file, chars, err := vc.Store(ctx, line)
+		file, chars, err := vc.Store(ctx, line, Ranger)
 		if err != nil {
 			return out, fmt.Errorf("preparing %q: %w", line, err)
 		}
@@ -76,17 +79,18 @@ func Prepare(ctx context.Context, vc VoiceCache) (Prepared, error) {
 func Missing(vc VoiceCache) []string {
 	var out []string
 	for _, line := range HostLines() {
-		if _, ok := vc.Lookup(line); !ok {
+		if _, ok := vc.Lookup(line, Ranger); !ok {
 			out = append(out, line)
 		}
 	}
 	return out
 }
 
-// WithVoices attaches recordings to the cues that have one. It only ever
-// reads the cache. A line whose recording is missing keeps its text and
-// loses its audio, and the caller is told which ones so a miss shows up
-// as the bug it is instead of as silence nobody notices.
+// WithVoices attaches recordings to every cue that has one, each in the
+// voice that cue was written for. It only ever reads the cache. A line
+// whose recording is missing keeps its text and loses its audio, and
+// the caller is told which ones so a miss shows up as the bug it is
+// instead of as silence nobody notices.
 func WithVoices(cues []Cue, vc VoiceCache) ([]Cue, []string) {
 	if vc == nil {
 		return cues, nil
@@ -95,10 +99,7 @@ func WithVoices(cues []Cue, vc VoiceCache) ([]Cue, []string) {
 	out := make([]Cue, len(cues))
 	copy(out, cues)
 	for i, c := range out {
-		if c.Speaker != SpeakerRanger {
-			continue
-		}
-		file, ok := vc.Lookup(c.Line)
+		file, ok := vc.Lookup(c.Line, c.Voice)
 		if !ok {
 			missing = append(missing, c.Line)
 			continue

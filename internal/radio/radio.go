@@ -42,6 +42,9 @@ type Cue struct {
 	At      time.Duration
 	Speaker Speaker
 	Line    string
+	// Voice is who reads this line. Never serialized: the client is
+	// handed a file to play, not a voice to choose.
+	Voice Voice
 	// Audio is the file this line is read from, empty when there is no
 	// recording. Empty is a quiet cue, never a reason to skip the line:
 	// the text is the night and the voice is on top of it.
@@ -105,15 +108,16 @@ const Stories = 3
 // the last story of the night is the one the player is lying in. Own
 // carries its own rules: it is the only story allowed to say the dog is
 // real, and it is built by the session, not here.
-func Broadcast(neighbours []Neighbour, own []string) []Cue {
+func Broadcast(neighbours []Neighbour, own []string, ownVoice Voice) []Cue {
 	var cues []Cue
 	at := openAt
+	voice := Ranger
 	add := func(who Speaker, line string) {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			return
 		}
-		cues = append(cues, Cue{At: at, Speaker: who, Line: line})
+		cues = append(cues, Cue{At: at, Speaker: who, Line: line, Voice: voice})
 		at += betweenL
 	}
 
@@ -126,9 +130,15 @@ func Broadcast(neighbours []Neighbour, own []string) []Cue {
 			break
 		}
 		at += beforeUp - betweenL
-		for _, line := range story(n) {
-			add(SpeakerStory, line)
+		// the dog says the true thing about themselves, the host says
+		// who they are and where. A dog announcing its own name and
+		// shelter in the third person is a station ident, not a dog.
+		if q := sentence(quirkOf(n)); q != "" {
+			voice = VoiceFor(n.Dog, n.Sheet)
+			add(SpeakerStory, q)
 		}
+		voice = Ranger
+		add(SpeakerRanger, naming(n))
 	}
 
 	if len(own) > 0 {
@@ -136,12 +146,20 @@ func Broadcast(neighbours []Neighbour, own []string) []Cue {
 		// more specific and points at the player, and the silence of the
 		// gap does the handoff better than a third announcement would
 		at += beforeUp - betweenL
-		for _, line := range own {
-			add(SpeakerOwn, line)
+		for i, line := range own {
+			// the session writes the host's introduction first and the
+			// dog's own lines after it
+			who, voiceHere := SpeakerOwn, ownVoice
+			if i == 0 {
+				who, voiceHere = SpeakerRanger, Ranger
+			}
+			voice = voiceHere
+			add(who, line)
 		}
 	}
 
 	at += beforeUp - betweenL
+	voice = Ranger
 	add(SpeakerRanger, HostClose)
 	return cues
 }
@@ -149,6 +167,14 @@ func Broadcast(neighbours []Neighbour, own []string) []Cue {
 // story is one neighbour, warm and short, ending on their own name and
 // where they are. Every line traces to the sheet or to the listing's
 // own fields, and nothing reaches for the reveal.
+// quirkOf is the one short true thing this dog does.
+func quirkOf(n Neighbour) string {
+	if len(n.Sheet.Quirks) == 0 {
+		return ""
+	}
+	return n.Sheet.Quirks[0].Value
+}
+
 // The radio seed is deliberately not used here. It is written to the
 // shape of a listing, "Meet NAME, a high-energy, affectionate
 // companion who...", and three of those in a row at two in the morning

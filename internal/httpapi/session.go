@@ -78,7 +78,7 @@ func (h *Sessions) rebuild(ctx context.Context, row session.Row) (*session.Sessi
 		return nil, err
 	}
 	s := session.Resume(row.ID, *dog, *org, sheet, rails, row.State)
-	s.Tonight(h.tonight(ctx, *dog, session.RadioStory(*dog, sheet)))
+	s.Tonight(h.tonight(ctx, *dog, session.RadioStory(*dog, sheet), radio.VoiceFor(*dog, sheet)))
 	return s, nil
 }
 
@@ -86,7 +86,7 @@ func (h *Sessions) rebuild(ctx context.Context, row session.Row) (*session.Sessi
 // Sheets come from the compiler's cache, so this costs no model calls
 // on a warm cache. A night with no neighbours is a quiet night, never
 // an error: the run matters more than the radio.
-func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []string) []radio.Cue {
+func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []string, ownVoice radio.Voice) []radio.Cue {
 	pool, err := h.provider.Search(ctx)
 	if err != nil {
 		log.Printf("radio: pool unavailable, tonight is quiet: %v", err)
@@ -112,7 +112,7 @@ func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []str
 	// default sheets, and capping the candidates first meant one
 	// duplicate inside the first three left the night a story short
 	cues, missing := radio.WithVoices(
-		radio.Broadcast(radio.Neighbours(candidates, playing, playing.OrgID), own), h.voice)
+		radio.Broadcast(radio.Neighbours(candidates, playing, playing.OrgID), own, ownVoice), h.voice)
 	if len(missing) > 0 {
 		// prepared at boot, so a miss here means the cache moved under us
 		log.Printf("radio: %d host lines have no recording, tonight is quieter than it should be: %v",
@@ -178,7 +178,7 @@ func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := session.New(dog, *org, sheet, h.rails, h.now())
-	s.Tonight(h.tonight(ctx, dog, session.RadioStory(dog, sheet)))
+	s.Tonight(h.tonight(ctx, dog, session.RadioStory(dog, sheet), radio.VoiceFor(dog, sheet)))
 	if err := h.store.Put(ctx, s, h.now()); err != nil {
 		log.Printf("session start: save %s: %v", s.ID, err)
 	}

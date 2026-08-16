@@ -7,6 +7,7 @@ import (
 
 	"github.com/nazboyko/good-dog/internal/audiocache"
 	"github.com/nazboyko/good-dog/internal/elevenlabs"
+	"github.com/nazboyko/good-dog/internal/radio"
 )
 
 // HostVoice is Ranger, backed by the disk cache and, only during
@@ -29,16 +30,20 @@ func NewHostVoice(cache *audiocache.Cache, client *elevenlabs.Client, budget *el
 	return &HostVoice{cache: cache, client: client, budget: budget, voiceID: voiceID, settings: settings}
 }
 
-func (h *HostVoice) key(text string) string {
-	return audiocache.Key(text, h.voiceID, h.settings.String())
+// keyFor is the cache name for one line in one voice. The voice is part
+// of the key because the same sentence read by the host and by a dog
+// are two different recordings.
+func keyFor(text string, v radio.Voice) string {
+	settings := elevenlabs.VoiceSettings{Stability: v.Stability, SimilarityBoost: v.Similarity}
+	return audiocache.Key(text, v.ID, settings.String())
 }
 
 // Lookup returns the url the client should play, not the disk path.
-func (h *HostVoice) Lookup(text string) (string, bool) {
+func (h *HostVoice) Lookup(text string, v radio.Voice) (string, bool) {
 	if h == nil || h.cache == nil {
 		return "", false
 	}
-	key := h.key(text)
+	key := keyFor(text, v)
 	if _, ok := h.cache.Get(key); !ok {
 		return "", false
 	}
@@ -48,18 +53,19 @@ func (h *HostVoice) Lookup(text string) (string, bool) {
 // Store synthesizes one line and caches it. Preparation only. The budget
 // guard runs before the call, never after, so a runaway loop cannot
 // spend the month before anybody notices.
-func (h *HostVoice) Store(ctx context.Context, text string) (string, int, error) {
+func (h *HostVoice) Store(ctx context.Context, text string, v radio.Voice) (string, int, error) {
 	if h == nil || h.client == nil {
 		return "", 0, fmt.Errorf("no voice service configured")
 	}
 	if err := h.budget.Allow(len(text)); err != nil {
 		return "", 0, fmt.Errorf("budget guard: %w", err)
 	}
-	audio, err := h.client.Synthesize(ctx, text, h.voiceID, h.settings)
+	settings := elevenlabs.VoiceSettings{Stability: v.Stability, SimilarityBoost: v.Similarity}
+	audio, err := h.client.Synthesize(ctx, text, v.ID, settings)
 	if err != nil {
 		return "", 0, err
 	}
-	key := h.key(text)
+	key := keyFor(text, v)
 	if _, err := h.cache.Put(key, audio); err != nil {
 		return "", 0, err
 	}

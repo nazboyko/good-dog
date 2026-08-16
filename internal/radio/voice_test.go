@@ -18,13 +18,13 @@ type fakeVoice struct {
 
 func newFakeVoice() *fakeVoice { return &fakeVoice{have: map[string]string{}} }
 
-func (f *fakeVoice) Lookup(text string) (string, bool) {
+func (f *fakeVoice) Lookup(text string, _ Voice) (string, bool) {
 	f.lookups++
 	file, ok := f.have[text]
 	return file, ok
 }
 
-func (f *fakeVoice) Store(_ context.Context, text string) (string, int, error) {
+func (f *fakeVoice) Store(_ context.Context, text string, _ Voice) (string, int, error) {
 	if f.fail {
 		return "", 0, errors.New("the voice service said no")
 	}
@@ -79,15 +79,17 @@ func TestPreparingTwiceCostsNothingTheSecondTime(t *testing.T) {
 // miss and never as a quiet paid network call under a live listener.
 func TestPlayingANightNeverSynthesizes(t *testing.T) {
 	vc := newFakeVoice()
-	cues := Broadcast(testPool(), []string{"Her name is Venus."})
+	cues := Broadcast(testPool(), []string{"Her name is Venus."}, Ranger)
 
 	// nothing prepared: every host line is reported missing, none stored
 	voiced, missing := WithVoices(cues, vc)
 	if len(vc.stores) != 0 {
 		t.Errorf("play time synthesized %d lines, it must never synthesize", len(vc.stores))
 	}
-	if len(missing) != len(HostLines()) {
-		t.Errorf("an empty cache should report every host line missing, got %v", missing)
+	// every line in the night, host and dog alike, is a miss on an
+	// empty cache: the whole broadcast is recorded ahead of time
+	if len(missing) != len(cues) {
+		t.Errorf("an empty cache should report all %d lines missing, got %d", len(cues), len(missing))
 	}
 	for _, c := range voiced {
 		if c.Audio != "" {
@@ -102,30 +104,29 @@ func TestPlayingANightNeverSynthesizes(t *testing.T) {
 	if _, err := Prepare(context.Background(), vc); err != nil {
 		t.Fatal(err)
 	}
+	// Prepare covers the host's fixed lines only. Everything a dog says,
+	// and every line naming a dog, is per dog and belongs to the
+	// pregeneration command, so it is still a named miss here.
 	stores := len(vc.stores)
 	voiced, missing = WithVoices(cues, vc)
-	if len(missing) != 0 {
-		t.Errorf("after preparing nothing should be missing, got %v", missing)
-	}
 	if len(vc.stores) != stores {
 		t.Error("attaching voices generated audio, it must only read")
 	}
-	var spoken, silent int
+	var spoken int
 	for _, c := range voiced {
-		if c.Audio != "" {
-			spoken++
-			if c.Speaker != SpeakerRanger {
-				t.Errorf("only the host is voiced in this ship, got %s: %q", c.Speaker, c.Line)
-			}
-		} else {
-			silent++
+		if c.Audio == "" {
+			continue
+		}
+		spoken++
+		if c.Line != HostOpen && c.Line != HostWhoIsUp && c.Line != HostClose {
+			t.Errorf("Prepare only covers the fixed host lines, but %q is voiced", c.Line)
 		}
 	}
 	if spoken != len(HostLines()) {
-		t.Errorf("every host line should be voiced, got %d", spoken)
+		t.Errorf("the three fixed host lines should be voiced, got %d", spoken)
 	}
-	if silent == 0 {
-		t.Error("the dog stories are text in this ship, something voiced them")
+	if len(missing) != len(cues)-len(HostLines()) {
+		t.Errorf("everything per dog is still missing, got %d of %d", len(missing), len(cues)-len(HostLines()))
 	}
 }
 
@@ -136,7 +137,7 @@ func TestEveryCueKeepsItsTextWithOrWithoutAudio(t *testing.T) {
 	if _, err := Prepare(context.Background(), vc); err != nil {
 		t.Fatal(err)
 	}
-	cues := Broadcast(testPool(), []string{"Her name is Venus."})
+	cues := Broadcast(testPool(), []string{"Her name is Venus."}, Ranger)
 	voiced, _ := WithVoices(cues, vc)
 	if len(voiced) != len(cues) {
 		t.Fatalf("attaching audio changed the night: %d cues became %d", len(cues), len(voiced))
@@ -163,7 +164,7 @@ func TestAFailedPreparationIsReportedNotSwallowed(t *testing.T) {
 		t.Error("every line is still missing after a failed run")
 	}
 	// and the night still builds, silent
-	voiced, missing := WithVoices(Broadcast(testPool(), nil), vc)
+	voiced, missing := WithVoices(Broadcast(testPool(), nil, Ranger), vc)
 	if len(voiced) == 0 {
 		t.Fatal("a silent night is still a night")
 	}
@@ -173,7 +174,7 @@ func TestAFailedPreparationIsReportedNotSwallowed(t *testing.T) {
 }
 
 func TestNoVoiceCacheAtAllLeavesTheNightIntact(t *testing.T) {
-	cues := Broadcast(testPool(), nil)
+	cues := Broadcast(testPool(), nil, Ranger)
 	voiced, missing := WithVoices(cues, nil)
 	if len(voiced) != len(cues) || len(missing) != 0 {
 		t.Errorf("with no cache the night passes through untouched: %d cues, %v", len(voiced), missing)
