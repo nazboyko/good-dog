@@ -1,39 +1,34 @@
-# GOOD DOG on Fly.
+# fly.toml app configuration file generated for good-dog on 2026-08-15T23:31:15-05:00
 #
-# One machine, always on. The radio is a live SSE stream and the night
-# is paced by the server, so a machine that suspends between requests
-# would drop a broadcast mid sentence. See the trap table in
-# docs/tech-stack.md: SSE plus Fly auto stop kills the radio at night.
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "good-dog"
-primary_region = "ord"
+app = 'good-dog'
+primary_region = 'ord'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  PORT = "8080"
-  # the three day run, not the playtest rails
-  RUN_RAILS = "full"
-  # sqlite and anything else that changes lives on the volume
-  DATA_DIR = "/data"
+  DATA_DIR = '/data'
+  PORT = '8080'
+  RUN_RAILS = 'full'
 
 [[mounts]]
-  source = "gooddog_data"
-  destination = "/data"
+  source = 'gooddog_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
 
-  # no compression on the event stream: gzip buffers it and the client
-  # sits in silence waiting for a flush that never comes
-  [http_service.http_options.response]
-    pristine = true
+  [http_service.http_options]
+    [http_service.http_options.response]
+      pristine = true
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'

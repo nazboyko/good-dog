@@ -11,7 +11,10 @@ RUN npm ci --silent
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.24-alpine AS build
+# Must be at least the version in go.mod, which is the one place the
+# toolchain is declared. CI reads it with go-version-file; this line is
+# the only copy of it in the repo and the only one that can drift.
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

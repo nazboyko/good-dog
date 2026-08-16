@@ -41,3 +41,15 @@ embed-check:
 	@test -f internal/webui/dist/index.html || (echo "internal/webui/dist is empty, run make embed" && exit 1)
 	@ls internal/webui/dist/assets/*.js >/dev/null 2>&1 || (echo "no js bundle embedded" && exit 1)
 	@echo "embedded: $$(du -sh internal/webui/dist | cut -f1) of frontend"
+
+# The Dockerfile is the only hand written copy of the Go version: CI
+# reads go.mod directly. A deploy that fails on a toolchain mismatch
+# costs a round trip, so catch it here instead.
+toolchain-check:
+	@modver=$$(awk '/^go /{print $$2}' go.mod); \
+	imgver=$$(awk -F'golang:' '/FROM golang:/{split($$2,a,"-"); print a[1]}' Dockerfile); \
+	modmm=$$(echo $$modver | cut -d. -f1,2); \
+	if [ "$$modmm" != "$$imgver" ]; then \
+		echo "go.mod wants $$modver but the Dockerfile builds on golang:$$imgver"; exit 1; \
+	fi; \
+	echo "toolchain: go.mod $$modver, image golang:$$imgver"
