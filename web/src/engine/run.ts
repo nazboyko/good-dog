@@ -98,8 +98,12 @@ async function call(method: string, path: string, body?: unknown): Promise<View>
   return (await res.json()) as View;
 }
 
+// startRun begins a life. The session just finished is passed along so
+// the server can hand back somebody else: living another life should
+// never be the same dog twice running.
 export function startRun(): Promise<View> {
-  return call("POST", "/api/session");
+  const after = finishedRuns();
+  return call("POST", "/api/session", after.length ? { after } : undefined);
 }
 
 // fetchRun reads a session by id. Null on any miss: unknown, expired,
@@ -133,9 +137,36 @@ export function rememberedRun(): string | null {
 
 export function forgetRun(): void {
   try {
+    const id = sessionStorage.getItem(SESSION_KEY);
     sessionStorage.removeItem(SESSION_KEY);
+    // the life is over but which dog it was still matters, so the next
+    // one is somebody new. Outlives the run, not the browser.
+    if (id) {
+      const kept = [id, ...finishedRuns().filter((x) => x !== id)].slice(0, RECENT_LIVES);
+      sessionStorage.setItem(FINISHED_KEY, JSON.stringify(kept));
+    }
   } catch {
     // nothing to forget
+  }
+}
+
+const FINISHED_KEY = "good-dog.finished";
+
+// How many lives back to remember. Enough that a sitting of three or
+// four runs never circles the same two dogs, short enough that a long
+// session still comes back round rather than running out of shelter.
+const RECENT_LIVES = 3;
+
+// finishedRuns is the recently finished sessions, newest first.
+export function finishedRuns(): string[] {
+  try {
+    const raw = sessionStorage.getItem(FINISHED_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    // an older single id, or storage refusing: neither is worth a crash
+    return [];
   }
 }
 

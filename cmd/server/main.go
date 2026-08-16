@@ -77,7 +77,8 @@ func main() {
 	if os.Getenv("RUN_RAILS") == "full" {
 		rails = session.FullRun
 	}
-	// Venus first for the playtest, unset FIRST_DOG for the pool
+	// FIRST_DOG pins one dog for a playtest. Unset, which is the default
+	// and how it ships, every run is a different real dog from the pool.
 	sessions := httpapi.NewSessions(provider, compiler, sessionDB, rails, os.Getenv("FIRST_DOG"))
 
 	// Ranger's voice, prepared before the door opens. The host says the

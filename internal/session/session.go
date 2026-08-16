@@ -175,6 +175,10 @@ func Resume(id string, dog animal.Animal, org animal.Organization, sheet *dogshe
 	return &Session{ID: id, rails: rails, state: state, dog: dog, org: org, sheet: sheet}
 }
 
+// DogID is whose life this is. Read by the next run so living another
+// life does not hand back the same animal twice in a row.
+func (s *Session) DogID() string { return s.dog.ID }
+
 // Beat is the current beat, safe to read from any goroutine.
 func (s *Session) Beat() Beat {
 	s.mu.Lock()

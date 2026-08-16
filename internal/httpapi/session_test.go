@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"net/http"
@@ -311,5 +313,182 @@ func TestSessionUnknownOrExpiredIDIsACleanMiss(t *testing.T) {
 	// and a fresh start still works, the player gets a new life
 	if r, nv := post(t, again.URL+"/api/session", ""); r.StatusCode != http.StatusCreated || nv.Beat != session.BeatWake {
 		t.Errorf("a clean new run must start after a miss: %d %+v", r.StatusCode, nv)
+	}
+}
+
+// poolProvider is a shelter with several real dogs in it, which is what
+// selection needs and the single dog stub cannot give.
+type poolProvider struct {
+	dogs []animal.Animal
+	org  animal.Organization
+}
+
+func (p poolProvider) Search(context.Context) ([]animal.Animal, error) { return p.dogs, nil }
+func (p poolProvider) GetAnimal(_ context.Context, id string) (*animal.Animal, error) {
+	for i := range p.dogs {
+		if p.dogs[i].ID == id {
+			return &p.dogs[i], nil
+		}
+	}
+	return nil, errors.New("no such dog")
+}
+func (p poolProvider) GetOrganization(context.Context, string) (*animal.Organization, error) {
+	return &p.org, nil
+}
+func (p poolProvider) GetStatus(context.Context, string) (animal.Status, error) {
+	return animal.StatusActive, nil
+}
+
+func newPool(t *testing.T, n int) (*Sessions, poolProvider) {
+	t.Helper()
+	org := animal.Organization{ID: "org", Name: "Ruff Start Rescue", City: "Princeton", State: "MN"}
+	var dogs []animal.Animal
+	for i := 0; i < n; i++ {
+		dogs = append(dogs, animal.Animal{
+			ID: fmt.Sprintf("dog-%d", i), Name: fmt.Sprintf("Dog %d", i), Breed: "mix",
+			AgeGroup: "Adult", Sex: "Female", Description: strings.Repeat("Good. ", 20),
+			ListingURL: "https://example.org/x", OrgID: "org", RetrievedAt: time.Now(),
+			Status: animal.StatusActive,
+		})
+	}
+	prov := poolProvider{dogs: dogs, org: org}
+	compiler := dogsheet.NewCompiler(failingLLM{}, dogsheet.NewCache(t.TempDir()))
+	h := NewSessions(prov, compiler, nil, session.ShortRun, "")
+	return h, prov
+}
+
+// Every run is somebody else's life. A game that always opens on the
+// same dog turns that dog into a mascot, which is the opposite of the
+// point, so selection is spread across the pool.
+func TestARunPicksFromTheWholePool(t *testing.T) {
+	h, prov := newPool(t, 5)
+	seen := map[string]bool{}
+	for i := range prov.dogs {
+		h.choose = func(int) int { return i }
+		dog, err := h.pickDog(context.Background(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen[dog.ID] = true
+	}
+	if len(seen) != len(prov.dogs) {
+		t.Errorf("only %d of %d dogs in the pool can ever be picked: %v", len(seen), len(prov.dogs), seen)
+	}
+}
+
+// Living another life hands you somebody new: the dog just finished is
+// excluded, so the same animal never comes back to back.
+func TestAnotherLifeIsNeverTheSameDogTwiceRunning(t *testing.T) {
+	h, prov := newPool(t, 5)
+	previous := prov.dogs[0].ID
+	seen := map[string]bool{}
+	for i := 0; i < len(prov.dogs)-1; i++ {
+		h.choose = func(int) int { return i }
+		dog, err := h.pickDog(context.Background(), []string{previous})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dog.ID == previous {
+			t.Fatalf("chooser %d handed back the dog just played: %s", i, dog.ID)
+		}
+		seen[dog.ID] = true
+	}
+	// excluding one must not collapse the pool to a single alternative
+	if len(seen) != len(prov.dogs)-1 {
+		t.Errorf("excluding one dog left %d reachable, want %d", len(seen), len(prov.dogs)-1)
+	}
+}
+
+// A pool that has shrunk to the dog you just played gives you that dog
+// again rather than refusing to start.
+func TestALastDogStandingIsStillALife(t *testing.T) {
+	h, prov := newPool(t, 1)
+	h.choose = func(int) int { return 0 }
+	dog, err := h.pickDog(context.Background(), []string{prov.dogs[0].ID})
+	if err != nil {
+		t.Fatalf("a single dog pool must still start a run: %v", err)
+	}
+	if dog.ID != prov.dogs[0].ID {
+		t.Errorf("got %s, the only dog there is is %s", dog.ID, prov.dogs[0].ID)
+	}
+}
+
+// The pin is for playtesting one dog on purpose and still wins.
+func TestThePinBeatsSelection(t *testing.T) {
+	h, prov := newPool(t, 5)
+	h.firstDog = prov.dogs[1].ID
+	h.choose = func(int) int { return 0 }
+	dog, err := h.pickDog(context.Background(), []string{prov.dogs[1].ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dog.ID != prov.dogs[1].ID {
+		t.Errorf("the pin must win even against the exclusion, got %s", dog.ID)
+	}
+}
+
+// Excluding only the last dog still let a three run sitting circle two
+// animals while ten others waited. The recent few are all excluded.
+func TestRecentDogsAreAllSkipped(t *testing.T) {
+	h, prov := newPool(t, 5)
+	recent := []string{prov.dogs[0].ID, prov.dogs[1].ID, prov.dogs[2].ID}
+	seen := map[string]bool{}
+	for i := 0; i < len(prov.dogs)-len(recent); i++ {
+		h.choose = func(int) int { return i }
+		dog, err := h.pickDog(context.Background(), recent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, skipped := range recent {
+			if dog.ID == skipped {
+				t.Errorf("chooser %d handed back a dog just played: %s", i, dog.ID)
+			}
+		}
+		seen[dog.ID] = true
+	}
+	if len(seen) != len(prov.dogs)-len(recent) {
+		t.Errorf("two dogs should have been left, %d were reachable", len(seen))
+	}
+}
+
+// When every dog is a recent one the run still starts.
+func TestAPoolOfNothingButRecentDogsStillStarts(t *testing.T) {
+	h, prov := newPool(t, 3)
+	all := []string{prov.dogs[0].ID, prov.dogs[1].ID, prov.dogs[2].ID}
+	h.choose = func(n int) int {
+		if n != len(prov.dogs) {
+			t.Errorf("the fallback should offer the whole pool, got %d", n)
+		}
+		return 0
+	}
+	if _, err := h.pickDog(context.Background(), all); err != nil {
+		t.Fatalf("a fully recent pool must still start a run: %v", err)
+	}
+}
+
+// Real shelters are full of dogs called Bella, and three of the twelve
+// curated ones are. Two runs in a row opening on that name reads as a
+// stuck picker even when they are two different animals, so the recent
+// exclusion matches on name as well as on id.
+func TestARecentNameIsSkippedEvenOnADifferentDog(t *testing.T) {
+	h, prov := newPool(t, 4)
+	// two different dogs, same name, which is the real fixture problem
+	prov.dogs[1].Name = prov.dogs[0].Name
+	h.provider = prov
+
+	seen := map[string]bool{}
+	for i := 0; i < 2; i++ {
+		h.choose = func(int) int { return i }
+		dog, err := h.pickDog(context.Background(), []string{prov.dogs[0].ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dog.Name == prov.dogs[0].Name {
+			t.Errorf("chooser %d handed back the name just played: %s (%s)", i, dog.Name, dog.ID)
+		}
+		seen[dog.ID] = true
+	}
+	if len(seen) != 2 {
+		t.Errorf("two dogs should have been left after skipping a shared name, got %d", len(seen))
 	}
 }

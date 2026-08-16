@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nazboyko/good-dog/internal/animal"
@@ -28,12 +30,16 @@ type Sessions struct {
 	rails session.Rails
 	// firstDog pins the playtest dog, empty means random from the pool
 	firstDog string
-	now      func() time.Time
+	// choose picks an index below n. Swappable so a test can pin the
+	// choice rather than reaching for a seed.
+	choose func(n int) int
+	now    func() time.Time
 }
 
 // NewSessions wires the store over the DB. A nil db is memory only.
 func NewSessions(provider animal.Provider, compiler *dogsheet.Compiler, db *session.DB, rails session.Rails, firstDog string) *Sessions {
-	h := &Sessions{provider: provider, compiler: compiler, rails: rails, firstDog: firstDog, now: time.Now}
+	h := &Sessions{provider: provider, compiler: compiler, rails: rails, firstDog: firstDog, now: time.Now,
+		choose: rand.IntN}
 	h.store = session.NewStore(db, h.rebuild)
 	return h
 }
@@ -143,7 +149,17 @@ func (h *Sessions) Register(mux *http.ServeMux) {
 
 func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	dog, err := h.pickDog(ctx)
+	var start struct {
+		// the sessions this player has just finished, newest first, so
+		// the next life is somebody they have not just been. Absent on
+		// a first run.
+		After []string `json:"after"`
+	}
+	if r.Body != nil {
+		// a missing or unreadable body is a plain first run, never an error
+		_ = json.NewDecoder(r.Body).Decode(&start)
+	}
+	dog, err := h.pickDog(ctx, h.dogsBehind(ctx, start.After))
 	if err != nil {
 		log.Printf("session start: %v", err)
 		http.Error(w, "no dog is available right now", http.StatusServiceUnavailable)
@@ -169,9 +185,19 @@ func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, s.View(h.now()))
 }
 
-// pickDog serves the pinned playtest dog when set, otherwise the first
-// active dog in the pool. Random choice lands with the second dog.
-func (h *Sessions) pickDog(ctx context.Context) (animal.Animal, error) {
+// pickDog chooses whose life this run is.
+//
+// The pin is for playtesting one dog on purpose. Without it, a run gets
+// a real dog at random from the pool, because the whole point is that
+// the life belongs to a different animal each time and a game that
+// always opens on the same dog quietly turns that dog into a mascot.
+//
+// recent is the handful of dogs this player has just been. All of them
+// are excluded, so living another life never hands back the same animal
+// twice running and does not circle a couple of dogs while nine others
+// wait. If every dog left is a recent one, the oldest of them comes
+// round again rather than the player getting nothing.
+func (h *Sessions) pickDog(ctx context.Context, recent []string) (animal.Animal, error) {
 	if h.firstDog != "" {
 		a, err := h.provider.GetAnimal(ctx, h.firstDog)
 		if err != nil {
@@ -190,7 +216,48 @@ func (h *Sessions) pickDog(ctx context.Context) (animal.Animal, error) {
 	if len(pool) == 0 {
 		return animal.Animal{}, errors.New("empty pool")
 	}
-	return pool[0], nil
+	// Skip by name as well as by id. Three of the twelve curated dogs
+	// are called Bella, which is true of real shelters and reads as a
+	// bug: two runs in a row opening on "Bella" looks like the picker
+	// is stuck even when they are two different animals with different
+	// breeds and different listings. A player identifies a dog by name.
+	skip := make(map[string]bool, len(recent)*2)
+	for _, id := range recent {
+		skip[id] = true
+		for _, a := range pool {
+			if a.ID == id {
+				skip[strings.ToLower(a.Name)] = true
+			}
+		}
+	}
+	fresh := make([]animal.Animal, 0, len(pool))
+	for _, a := range pool {
+		if !skip[a.ID] && !skip[strings.ToLower(a.Name)] {
+			fresh = append(fresh, a)
+		}
+	}
+	if len(fresh) == 0 {
+		fresh = pool
+	}
+	return fresh[h.choose(len(fresh))], nil
+}
+
+// dogsBehind maps recently finished sessions to the dogs they were, so
+// the next run can avoid them. Sessions the store has forgotten simply
+// stop excluding anything, which is the right way for this to decay.
+func (h *Sessions) dogsBehind(ctx context.Context, sessionIDs []string) []string {
+	var out []string
+	for _, id := range sessionIDs {
+		if id == "" {
+			continue
+		}
+		s, err := h.store.Get(ctx, id)
+		if err != nil {
+			continue
+		}
+		out = append(out, s.DogID())
+	}
+	return out
 }
 
 func (h *Sessions) load(w http.ResponseWriter, r *http.Request) (*session.Session, bool) {
