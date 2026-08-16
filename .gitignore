@@ -16,3 +16,6 @@ internal/webui/dist/
 
 # the built binary
 bin/
+
+# the demo recording is published, not committed
+docs/video/

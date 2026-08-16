@@ -6,7 +6,7 @@ DEV Weekend Challenge: Dog Days Edition. Prompt: build something for, about, or 
 - Start: August 14, 2026 at 02:00 UTC
 - Deadline: August 17, 2026 at 06:59 UTC, that is Sunday 23:59 PDT, about Monday 01:59 CDT
 - Publish the submission by Sunday 20:00 CDT at the latest, do not gamble on the last hour
-- Winners announced September 3, 2026
+- Winners announced September 10, 2026
 
 ## Submission
 - One post on dev.to using the official template, required tag #weekendchallenge
