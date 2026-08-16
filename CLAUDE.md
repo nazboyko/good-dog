@@ -27,7 +27,11 @@ Gate 1, after writing code, before commit. Review the diff with fresh eyes, idea
 
 Gate 2, before commit. Run affected tests, then the full suite. If prompts or narrative changed, run the grounding evals. Run the end to end smoke of the core loop. A red test blocks the commit, no exceptions.
 
-Checking a test by reintroducing the bug it exists for is worth doing, and the way back is a file copy. Copy the file aside, mutate it, run, copy it back. Never `git checkout` over a path or a directory to clean up: an uncommitted unit lives only in the working tree and checkout deletes all of it, not just the mutation. This has already destroyed a finished unit once.
+A check that shares its source with the thing it checks is not a check. Every acceptance guard needs independent ground truth: a second decode, a value written down by hand, a table the code under test cannot reach. If the guard and the subject can go wrong together, the guard will agree with the bug and report success, which is worse than having no guard at all, because now the board is green.
+
+Every new guard is mutation-checked before the unit ships. Put back the bug it exists for, watch it fail, take the bug out again. A guard that has never been seen to fail has not been shown to work. This is not optional and it is not only for tests: runtime acceptance checks count too.
+
+The way back from a mutation is a file copy. Copy the file aside, mutate it, run, copy it back. Never `git checkout` over a path or a directory to clean up: an uncommitted unit lives only in the working tree and checkout deletes all of it, not just the mutation. This has already destroyed a finished unit once.
 
 Use the /ship command to run gates 1 and 2 and commit.
 
