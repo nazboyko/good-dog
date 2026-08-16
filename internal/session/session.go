@@ -109,6 +109,11 @@ type NightView struct {
 	// stream is what plays it; this is here so a client whose stream
 	// never connects can still run the night off its own timer.
 	Radio []radio.Cue `json:"radio,omitempty"`
+	// what the button says while the broadcast is still going, and what
+	// it says once the night is over. A disabled button with no reason
+	// on it reads as a bug to somebody who does not know why.
+	Holding string `json:"holding"`
+	Onward  string `json:"onward"`
 }
 
 // EpilogueView is the reveal. It is the first and only place the photo
@@ -309,7 +314,7 @@ func (s *Session) View(now time.Time) View {
 				story = append(story, kept)
 			}
 		}
-		v.Night = &NightView{Story: story, Radio: s.tonight()}
+		v.Night = &NightView{Story: story, Radio: s.tonight(), Holding: radio.StillOn, Onward: radio.Sleep}
 	case BeatEpilogue, BeatDone:
 		v.Epilogue = s.epilogue(now, started, st.Ending)
 	}

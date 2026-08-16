@@ -138,7 +138,8 @@ func plan(ctx context.Context, provider animal.Provider, compiler *dogsheet.Comp
 		out = append(out, line{Dog: dog, Text: text, Voice: v})
 	}
 
-	// the host's fixed lines, said every night whoever is on
+	// every line the host can say, across the whole rotation: any night
+	// may draw any of them, so all of them have to exist
 	for _, l := range radio.HostLines() {
 		add("(host)", l, radio.Ranger)
 	}
@@ -157,11 +158,13 @@ func plan(ctx context.Context, provider animal.Provider, compiler *dogsheet.Comp
 
 		// as a neighbour: the dog says their own true thing, the host
 		// names them and the place
-		for _, c := range radio.Broadcast([]radio.Neighbour{n}, nil, voice) {
+		// the seed only picks host variants, which are already covered
+		// above, so any seed enumerates the same per dog lines
+		for _, c := range radio.Broadcast([]radio.Neighbour{n}, nil, voice, 0) {
 			add(dog.Name, c.Line, c.Voice)
 		}
 		// as the dog the player is living as: the whole story is theirs
-		for _, c := range radio.Broadcast(nil, session.RadioStory(dog, sheet), voice) {
+		for _, c := range radio.Broadcast(nil, session.RadioStory(dog, sheet), voice, 0) {
 			add(dog.Name, c.Line, c.Voice)
 		}
 	}

@@ -81,21 +81,79 @@ const (
 	beforeUp = 2400 * time.Millisecond
 )
 
-// The host's lines. Fixed strings, the same every night, which is what
-// lets the whole spoken half of the radio be prepared once and read off
-// a disk cache forever after. Nothing here names a dog: the moment a
-// host line took a name it would be per dog and could not be a constant.
+// The host's lines. A small rotation rather than three constants: once
+// living another life is the point of the game, a night that opens and
+// closes with the same sentence every time turns Ranger into a jingle.
+// Same voice, same tone, different words.
+//
+// Still fixed strings, which is what lets the whole spoken half of the
+// radio be recorded once and read off a disk cache forever. Nothing
+// here names a dog: the moment a host line took a name it would be per
+// dog and could not be a constant.
+var (
+	hostOpens = []string{
+		"Shelter radio, and it is late.",
+		"Shelter radio. Nobody here is going anywhere tonight.",
+		"This is the late one. Shelter radio.",
+		"Shelter radio, and the building has gone quiet.",
+	}
+	hostBridges = []string{
+		"Lights are down. Here is who is still awake.",
+		"Lights are down. Here is tonight.",
+		"Everybody is bedded down. Here is who is still up.",
+		"Here is who is still awake, then.",
+	}
+	hostCloses = []string{
+		"That is everyone tonight. Sleep if you can.",
+		"That is everyone. Get some sleep.",
+		"That is the lot of them. Goodnight.",
+		"That is everyone tonight. Rest up.",
+	}
+)
+
+// HostOpen, HostWhoIsUp and HostClose are the first of each rotation.
+// Kept named because tests and the boot check refer to them, and
+// because a night with a zero seed is still a real night.
 const (
 	HostOpen    = "Shelter radio, and it is late."
 	HostWhoIsUp = "Lights are down. Here is who is still awake."
 	HostClose   = "That is everyone tonight. Sleep if you can."
 )
 
-// HostLines is every line Ranger says, in the order he says them. This
-// is the set that has to exist in the cache before a night can start.
+// HostLines is every line Ranger can say, across the whole rotation.
+// This is the set that has to exist in the cache before a night can
+// start, because any night may draw any of them.
 func HostLines() []string {
-	return []string{HostOpen, HostWhoIsUp, HostClose}
+	out := make([]string, 0, len(hostOpens)+len(hostBridges)+len(hostCloses))
+	out = append(out, hostOpens...)
+	out = append(out, hostBridges...)
+	out = append(out, hostCloses...)
+	return out
 }
+
+// pick chooses one line of a rotation for this night. Deterministic on
+// the seed, because the stream and the client's fallback both build the
+// same night from the same session and a night that changed between
+// them would play two different broadcasts.
+func pick(lines []string, seed int64) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	i := seed % int64(len(lines))
+	if i < 0 {
+		i = -i
+	}
+	return lines[i]
+}
+
+// The button under the night. It is disabled while the broadcast runs,
+// and a disabled button with no explanation reads as a bug to somebody
+// who does not know why, so it says the reason instead of nothing. No
+// count, no bar, no time remaining: just what is true.
+const (
+	StillOn = "the radio is still on"
+	Sleep   = "sleep"
+)
 
 // Stories is how many neighbours one night holds. Three is the number
 // the plan falls back to when the evening runs short, so it is the
@@ -108,7 +166,7 @@ const Stories = 3
 // the last story of the night is the one the player is lying in. Own
 // carries its own rules: it is the only story allowed to say the dog is
 // real, and it is built by the session, not here.
-func Broadcast(neighbours []Neighbour, own []string, ownVoice Voice) []Cue {
+func Broadcast(neighbours []Neighbour, own []string, ownVoice Voice, seed int64) []Cue {
 	var cues []Cue
 	at := openAt
 	voice := Ranger
@@ -121,9 +179,9 @@ func Broadcast(neighbours []Neighbour, own []string, ownVoice Voice) []Cue {
 		at += betweenL
 	}
 
-	add(SpeakerRanger, HostOpen)
+	add(SpeakerRanger, pick(hostOpens, seed))
 	at += afterOne - betweenL
-	add(SpeakerRanger, HostWhoIsUp)
+	add(SpeakerRanger, pick(hostBridges, seed))
 
 	for i, n := range neighbours {
 		if i >= Stories {
@@ -160,7 +218,7 @@ func Broadcast(neighbours []Neighbour, own []string, ownVoice Voice) []Cue {
 
 	at += beforeUp - betweenL
 	voice = Ranger
-	add(SpeakerRanger, HostClose)
+	add(SpeakerRanger, pick(hostCloses, seed))
 	return cues
 }
 

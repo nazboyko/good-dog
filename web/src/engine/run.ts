@@ -73,7 +73,7 @@ export interface View {
     arc?: string;
     parting?: string;
   };
-  night?: { story: string[]; radio?: RadioCue[] };
+  night?: { story: string[]; radio?: RadioCue[]; holding?: string; onward?: string };
   epilogue?: EpilogueView;
 }
 

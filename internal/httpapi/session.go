@@ -78,7 +78,7 @@ func (h *Sessions) rebuild(ctx context.Context, row session.Row) (*session.Sessi
 		return nil, err
 	}
 	s := session.Resume(row.ID, *dog, *org, sheet, rails, row.State)
-	s.Tonight(h.tonight(ctx, *dog, session.RadioStory(*dog, sheet), radio.VoiceFor(*dog, sheet)))
+	s.Tonight(h.tonight(ctx, *dog, session.RadioStory(*dog, sheet), radio.VoiceFor(*dog, sheet), nightSeed(row.ID)))
 	return s, nil
 }
 
@@ -86,7 +86,11 @@ func (h *Sessions) rebuild(ctx context.Context, row session.Row) (*session.Sessi
 // Sheets come from the compiler's cache, so this costs no model calls
 // on a warm cache. A night with no neighbours is a quiet night, never
 // an error: the run matters more than the radio.
-func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []string, ownVoice radio.Voice) []radio.Cue {
+// tonight builds the night. seed picks which of Ranger's lines this one
+// gets, and it has to be stable for the session: the stream and the
+// client's fallback both build the night independently, and a seed that
+// moved between them would play two different broadcasts.
+func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []string, ownVoice radio.Voice, seed int64) []radio.Cue {
 	pool, err := h.provider.Search(ctx)
 	if err != nil {
 		log.Printf("radio: pool unavailable, tonight is quiet: %v", err)
@@ -112,7 +116,7 @@ func (h *Sessions) tonight(ctx context.Context, playing animal.Animal, own []str
 	// default sheets, and capping the candidates first meant one
 	// duplicate inside the first three left the night a story short
 	cues, missing := radio.WithVoices(
-		radio.Broadcast(radio.Neighbours(candidates, playing, playing.OrgID), own, ownVoice), h.voice)
+		radio.Broadcast(radio.Neighbours(candidates, playing, playing.OrgID), own, ownVoice, seed), h.voice)
 	if len(missing) > 0 {
 		// prepared at boot, so a miss here means the cache moved under us
 		log.Printf("radio: %d host lines have no recording, tonight is quieter than it should be: %v",
@@ -137,6 +141,19 @@ func (h *Sessions) Tonight(ctx context.Context, sessionID string) []radio.Cue {
 		return nil
 	}
 	return v.Night.Radio
+}
+
+// nightSeed turns a session id into a stable number, so the same life
+// always hears the same night however many times it reconnects.
+func nightSeed(id string) int64 {
+	var n int64
+	for _, r := range id {
+		n = n*31 + int64(r)
+	}
+	if n < 0 {
+		n = -n
+	}
+	return n
 }
 
 func (h *Sessions) Register(mux *http.ServeMux) {
@@ -178,7 +195,7 @@ func (h *Sessions) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := session.New(dog, *org, sheet, h.rails, h.now())
-	s.Tonight(h.tonight(ctx, dog, session.RadioStory(dog, sheet), radio.VoiceFor(dog, sheet)))
+	s.Tonight(h.tonight(ctx, dog, session.RadioStory(dog, sheet), radio.VoiceFor(dog, sheet), nightSeed(s.ID)))
 	if err := h.store.Put(ctx, s, h.now()); err != nil {
 		log.Printf("session start: save %s: %v", s.ID, err)
 	}

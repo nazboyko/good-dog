@@ -36,7 +36,7 @@ func testPool() []Neighbour {
 // has been living in it all day.
 func TestOnlyTheOwnStoryMayNameTheReveal(t *testing.T) {
 	own := []string{"Here is Venus.", "She is real, and she is still here."}
-	cues := Broadcast(testPool(), own, Ranger)
+	cues := Broadcast(testPool(), own, Ranger, 0)
 	var ownCues, otherCues int
 	for _, c := range cues {
 		if strings.Contains(c.Line, "is real") {
@@ -85,7 +85,7 @@ func contains(list []string, s string) bool {
 // A neighbour story that says a neighbour is real, or still waiting,
 // spends that beat early and on the wrong animal.
 func TestNeighbourStoriesNeverReachForTheReveal(t *testing.T) {
-	cues := Broadcast(testPool(), nil, Ranger)
+	cues := Broadcast(testPool(), nil, Ranger, 0)
 	forbidden := []string{
 		"is real", "are real", "still here", "still waiting", "waiting for you",
 		"adopt", "forever home", "take him home", "take her home", "could be yours",
@@ -107,7 +107,7 @@ func TestNeighbourStoriesNeverReachForTheReveal(t *testing.T) {
 // and then it stops.
 func TestEveryStoryEndsOnARealNameAndPlace(t *testing.T) {
 	pool := testPool()
-	cues := Broadcast(pool, nil, Ranger)
+	cues := Broadcast(pool, nil, Ranger, 0)
 	for _, n := range pool {
 		// the naming line is the host's now: a dog announcing its own
 		// name and shelter in the third person is a station ident
@@ -137,7 +137,7 @@ func TestEveryStoryEndsOnARealNameAndPlace(t *testing.T) {
 }
 
 func TestCuesOnlyEverMoveForward(t *testing.T) {
-	cues := Broadcast(testPool(), []string{"Here is Venus.", "She is real, and she is still here."}, Ranger)
+	cues := Broadcast(testPool(), []string{"Here is Venus.", "She is real, and she is still here."}, Ranger, 0)
 	if len(cues) < 8 {
 		t.Fatalf("a night with three dogs is more than %d cues", len(cues))
 	}
@@ -198,8 +198,8 @@ func TestDefaultSheetsAreNotBroadcast(t *testing.T) {
 
 func TestBroadcastIsPure(t *testing.T) {
 	pool := testPool()
-	a := Broadcast(pool, nil, Ranger)
-	b := Broadcast(pool, nil, Ranger)
+	a := Broadcast(pool, nil, Ranger, 0)
+	b := Broadcast(pool, nil, Ranger, 0)
 	if len(a) != len(b) {
 		t.Fatalf("two runs gave %d and %d cues", len(a), len(b))
 	}
@@ -222,7 +222,7 @@ func TestBroadcastIsPure(t *testing.T) {
 // to cover the fallback used hand written small numbers and could not
 // see this, so the check has to be against the real serialization.
 func TestCuesSerializeTheirOffsetInMilliseconds(t *testing.T) {
-	cues := Broadcast(testPool(), nil, Ranger)
+	cues := Broadcast(testPool(), nil, Ranger, 0)
 	raw, err := json.Marshal(cues)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +276,7 @@ func TestOneNightNeverNamesTheSameDogTwice(t *testing.T) {
 // neighbours are chosen from other shelters precisely so their naming
 // line does not give away the player's, and the frame has to agree.
 func TestTheHostNeverClaimsOneBuilding(t *testing.T) {
-	for _, c := range Broadcast(testPool(), nil, Ranger) {
+	for _, c := range Broadcast(testPool(), nil, Ranger, 0) {
 		if c.Speaker != SpeakerRanger {
 			continue
 		}
@@ -293,7 +293,7 @@ func TestTheHostNeverClaimsOneBuilding(t *testing.T) {
 // pushed the naming beat to fourth in a queue and it landed flat.
 func TestTheOwnSegmentIsAnnouncedOnce(t *testing.T) {
 	own := []string{"This one is for the dog in the third kennel down.", "Her name is Venus."}
-	cues := Broadcast(testPool(), own, Ranger)
+	cues := Broadcast(testPool(), own, Ranger, 0)
 	// everything about a neighbour, the dog's line and the host naming
 	// them, counts as the neighbour segment
 	lastNeighbour, firstOwn := -1, -1
@@ -319,7 +319,7 @@ func TestTheOwnSegmentIsAnnouncedOnce(t *testing.T) {
 func TestEveryLineIsAFinishedSentence(t *testing.T) {
 	pool := testPool()
 	pool[0].Sheet.Quirks[0].Value = "Sleeps with one paw over his nose"
-	for _, c := range Broadcast(pool, nil, Ranger) {
+	for _, c := range Broadcast(pool, nil, Ranger, 0) {
 		if !strings.HasSuffix(c.Line, ".") && !strings.HasSuffix(c.Line, "?") {
 			t.Errorf("%s cue is a fragment: %q", c.Speaker, c.Line)
 		}
@@ -331,7 +331,7 @@ func TestEveryLineIsAFinishedSentence(t *testing.T) {
 func TestNeighbourStoriesDoNotReadTheListingBlurb(t *testing.T) {
 	pool := testPool()
 	pool[0].Sheet.RadioSeed.Value = "Meet Keno, a resilient three-legged hound mix whose boundless energy shines."
-	for _, c := range Broadcast(pool, nil, Ranger) {
+	for _, c := range Broadcast(pool, nil, Ranger, 0) {
 		if strings.Contains(c.Line, "Meet ") || strings.Contains(c.Line, "resilient") {
 			t.Errorf("a listing blurb reached the radio: %s", c.Line)
 		}
@@ -372,7 +372,7 @@ func TestTheNightSpreadsAcrossSheltersWhenItCan(t *testing.T) {
 // ends on them.
 func TestTheOwnSegmentIsMarkedSoItCanStay(t *testing.T) {
 	own := []string{"Her name is Venus.", "She is real, and she is still here."}
-	cues := Broadcast(testPool(), own, Ranger)
+	cues := Broadcast(testPool(), own, Ranger, 0)
 
 	var ownCues, neighbourCues int
 	for _, c := range cues {
@@ -409,9 +409,90 @@ func TestTheOwnSegmentIsMarkedSoItCanStay(t *testing.T) {
 		}
 	}
 	// and a night with no own segment marks nothing own
-	for _, c := range Broadcast(testPool(), nil, Ranger) {
+	for _, c := range Broadcast(testPool(), nil, Ranger, 0) {
 		if c.Speaker == SpeakerOwn {
 			t.Errorf("no own story was given, yet a line is marked own: %s", c.Line)
 		}
+	}
+}
+
+// Living another life is the point of the game now, so a night that
+// opens and closes with the same sentence every time turns the host
+// into a jingle. Same voice, same tone, different words.
+func TestTheHostDoesNotSayTheSameThingEveryNight(t *testing.T) {
+	opens, bridges, closes := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for seed := int64(0); seed < 12; seed++ {
+		cues := Broadcast(testPool(), nil, Ranger, seed)
+		opens[cues[0].Line] = true
+		bridges[cues[1].Line] = true
+		closes[cues[len(cues)-1].Line] = true
+	}
+	if len(opens) < 3 || len(bridges) < 3 || len(closes) < 3 {
+		t.Errorf("the rotation is too thin: %d opens, %d bridges, %d closes",
+			len(opens), len(bridges), len(closes))
+	}
+	// and every one of them is in the set the recording command covers,
+	// or a night draws a line nobody recorded
+	recorded := map[string]bool{}
+	for _, l := range HostLines() {
+		recorded[l] = true
+	}
+	for _, set := range []map[string]bool{opens, bridges, closes} {
+		for line := range set {
+			if !recorded[line] {
+				t.Errorf("a night can draw %q, which make voices never records", line)
+			}
+		}
+	}
+}
+
+// The same life hears the same night however many times it reconnects.
+// The stream and the client's fallback build the night independently,
+// so a seed that moved between them would play two different broadcasts.
+func TestANightIsTheSameEveryTimeItIsBuilt(t *testing.T) {
+	for _, seed := range []int64{0, 7, 41, 1_000_003} {
+		first := Broadcast(testPool(), []string{"Her name is Venus."}, Ranger, seed)
+		for i := 0; i < 5; i++ {
+			again := Broadcast(testPool(), []string{"Her name is Venus."}, Ranger, seed)
+			if len(again) != len(first) {
+				t.Fatalf("seed %d built %d cues then %d", seed, len(first), len(again))
+			}
+			for j := range first {
+				if again[j].Line != first[j].Line {
+					t.Fatalf("seed %d cue %d changed between builds", seed, j)
+				}
+			}
+		}
+	}
+	// a negative or huge seed still lands on a real line
+	for _, seed := range []int64{-1, -999, 1 << 62} {
+		if cues := Broadcast(testPool(), nil, Ranger, seed); cues[0].Line == "" {
+			t.Errorf("seed %d produced an empty opener", seed)
+		}
+	}
+}
+
+// The button under the night is disabled while the broadcast runs, and
+// a disabled button with no explanation reads as a bug. It says why.
+func TestTheWaitIsNamedNotCounted(t *testing.T) {
+	if StillOn == "" || Sleep == "" {
+		t.Fatal("both button labels have to exist")
+	}
+	if StillOn == Sleep {
+		t.Error("the wait and the way out must not read the same")
+	}
+	for _, digit := range "0123456789" {
+		if strings.ContainsRune(StillOn, digit) {
+			t.Errorf("the wait counts at the player: %q", StillOn)
+		}
+	}
+	for _, machine := range []string{"loading", "please wait", "%", "remaining", "of "} {
+		if strings.Contains(strings.ToLower(StillOn), machine) {
+			t.Errorf("the wait is not in the game's voice: %q", StillOn)
+		}
+	}
+	// it names the reason, which is the radio
+	if !strings.Contains(strings.ToLower(StillOn), "radio") {
+		t.Errorf("the wait should say what is holding it: %q", StillOn)
 	}
 }

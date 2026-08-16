@@ -1,19 +1,17 @@
 package radio
 
-import (
-	"context"
-	"fmt"
-)
+import "context"
 
 // The spoken half of the radio.
 //
-// Nothing is ever synthesized while somebody is listening. The host says
-// the same three lines every night, so the whole spoken set is prepared
-// once, before any night can start, and every night after that reads it
-// off the disk cache. A miss at play time is a bug and is reported as
-// one: it is never quietly covered by generating the line right then,
-// because that would put a paid network call with no budget ceiling in
-// the middle of a beat that is supposed to be paced to the second.
+// Nothing is ever synthesized while somebody is listening. The host
+// draws from a small fixed rotation and every dog's lines are fixed
+// too, so the whole spoken set is recorded once by `make voices` and
+// every night after that reads it off the disk cache. A miss at play
+// time is a bug and is reported as one: it is never quietly covered by
+// generating the line right then, because that would put a paid network
+// call with no budget ceiling in the middle of a beat paced to the
+// second.
 //
 // The text is the night. The voice is on top of it. A line with no
 // recording still plays as a line.
@@ -32,50 +30,13 @@ type VoiceCache interface {
 	Store(ctx context.Context, text string, v Voice) (file string, chars int, err error)
 }
 
-// Prepared is what one preparation run did, for the log and for the
-// operator who wants to know what it cost.
-type Prepared struct {
-	Lines     int
-	AlreadyIn int
-	Generated int
-	Chars     int
-	Files     map[string]string
-}
-
-func (p Prepared) String() string {
-	return fmt.Sprintf("host voice ready: %d lines, %d already cached, %d generated, %d characters",
-		p.Lines, p.AlreadyIn, p.Generated, p.Chars)
-}
-
-// Prepare makes sure every host line has a recording on disk. Safe to
-// run on every boot: a warm cache costs nothing and generates nothing.
+// Missing lists host lines with no recording on disk.
 //
-// An error here does not stop the game. A silent radio is a worse night
-// than a spoken one and a much better night than no night, so the caller
-// logs and carries on with whatever was prepared.
-func Prepare(ctx context.Context, vc VoiceCache) (Prepared, error) {
-	out := Prepared{Files: map[string]string{}}
-	for _, line := range HostLines() {
-		out.Lines++
-		if file, ok := vc.Lookup(line, Ranger); ok {
-			out.AlreadyIn++
-			out.Files[line] = file
-			continue
-		}
-		file, chars, err := vc.Store(ctx, line, Ranger)
-		if err != nil {
-			return out, fmt.Errorf("preparing %q: %w", line, err)
-		}
-		out.Generated++
-		out.Chars += chars
-		out.Files[line] = file
-	}
-	return out, nil
-}
-
-// Missing lists host lines with no recording on disk. Empty is the only
-// healthy answer once Prepare has run, and the server says so loudly at
-// boot rather than letting a player find out at midnight.
+// The server checks this at boot and says so loudly, and that is all it
+// does: it never records. Recording is `make voices` and nothing else,
+// because a boot that quietly synthesizes is a boot that quietly spends
+// money, and adding four variants to a rotation should not cost
+// anything until somebody asks for it.
 func Missing(vc VoiceCache) []string {
 	var out []string
 	for _, line := range HostLines() {

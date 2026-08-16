@@ -105,15 +105,15 @@ func main() {
 	if elevenClient != nil {
 		host := httpapi.NewHostVoice(ttsCache, elevenClient, &elevenlabs.Budget{},
 			elevenlabs.DefaultVoiceID, elevenlabs.VoiceSettings{Stability: 0.5, SimilarityBoost: 0.75})
-		if report, err := radio.Prepare(context.Background(), host); err != nil {
-			log.Printf("radio: host voice not ready, tonight is text only: %v", err)
+		// boot checks, it never records: recording is `make voices`, so a
+		// boot cannot quietly spend money and a missing line shows up as
+		// a line in the log rather than as a charge on the account
+		sessions = sessions.WithVoice(host)
+		if missing := radio.Missing(host); len(missing) > 0 {
+			log.Printf("radio: %d of %d host lines have no recording, run `make voices`: %v",
+				len(missing), len(radio.HostLines()), missing)
 		} else {
-			log.Print(report)
-			if missing := radio.Missing(host); len(missing) > 0 {
-				log.Printf("radio: %d host lines still missing after preparation: %v", len(missing), missing)
-			} else {
-				sessions = sessions.WithVoice(host)
-			}
+			log.Printf("radio: all %d host lines are recorded", len(radio.HostLines()))
 		}
 	} else {
 		log.Print("radio: no speech key, tonight is text only")

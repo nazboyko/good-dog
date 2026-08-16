@@ -191,8 +191,12 @@ export function Night({ view, onNext, busy }: { view: View; onNext: () => void; 
           </p>
         ))}
       </blockquote>
+      {/* the button is locked while the broadcast runs, so it says why
+          rather than sitting there dead. No count and no bar: a night
+          that tells you how much is left is a night you are waiting
+          out rather than listening to. */}
       <button onClick={onNext} disabled={busy || !over}>
-        sleep
+        {over ? (view.night?.onward ?? "sleep") : (view.night?.holding ?? "the radio is still on")}
       </button>
     </section>
   );
